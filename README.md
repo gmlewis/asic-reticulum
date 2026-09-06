@@ -54,7 +54,7 @@ asic-reticulum/
 │   │       │   ├── Sha256Constants.scala  # FIPS 180-4 H0 vector and K0..K63 constants
 │   │       │   ├── Sha256Round.scala      # Single-cycle SHA-256 compression step
 │   │       │   ├── Sha256Pipe.scala       # Pipelined SHA-256 engine with midstate restore
-│   │       │   └── Stamper.scala          # (Upcoming) Full autonomous stamp grinder
+│   │       │   └── Stamper.scala          # Autonomous IFAC Hashcash stamp grinder
 │   │       └── bus/
 │   │           └── QspiSlave.scala        # (Upcoming) 4-bit QSPI slave with Stream interface
 │   ├── sim/                               # Table-driven simulation test suites (ScalaTest + SpinalSim)
@@ -62,7 +62,8 @@ asic-reticulum/
 │   │       └── crypto/
 │   │           ├── LeadZeroCounterTest.scala # 32-bit & 256-bit priority sweeps
 │   │           ├── Sha256RoundTest.scala     # FIPS vectors & randomized stress tests
-│   │           └── Sha256PipeTest.scala      # Pipelining, midstate restore & backpressure tests
+│   │           ├── Sha256PipeTest.scala      # Pipelining, midstate restore & backpressure tests
+│   │           └── StamperTest.scala         # Autonomous candidate search & IRQ verification
 │   └── gen/                               # Synthesis-ready generated Verilog output
 ```
 
@@ -112,12 +113,17 @@ To generate standard, synthesis-ready Verilog into `hw/gen/`:
   ```bash
   sbt "runMain reticulum.crypto.Sha256PipeVerilog"
   ```
+- **Generate Autonomous Stamp Grinder (`Stamper.v`)**:
+  ```bash
+  sbt "runMain reticulum.crypto.StamperVerilog"
+  ```
 
 Inspect the generated outputs:
 ```bash
 cat hw/gen/LeadZeroCounter.v
 cat hw/gen/Sha256Round.v
 cat hw/gen/Sha256Pipe.v
+cat hw/gen/Stamper.v
 ```
 
 ---
@@ -127,7 +133,7 @@ cat hw/gen/Sha256Pipe.v
 - [x] **Milestone 0**: Repository setup, build system (`build.sbt`), and SpinalHDL toolchain validation.
 - [x] **Milestone 1**: Core primitives — `LeadZeroCounter` and `Sha256Round`.
 - [x] **Milestone 2**: Multi-stage pipelined SHA-256 engine with midstate restore register.
-- [ ] **Milestone 3**: Autonomous IFAC Hashcash Stamp Grinder with nonce streaming and `meetsTarget` interrupt assertion.
+- [x] **Milestone 3**: Autonomous IFAC Hashcash Stamp Grinder with nonce streaming and `meetsTarget` interrupt assertion.
 - [ ] **Milestone 4**: 4-bit QSPI slave interface (`Stream` handshake + command decoder FSM).
 - [ ] **Milestone 5**: Verification harness comparing SpinalSim / Verilator against `go-reticulum` golden test vectors.
 - [ ] **Milestone 6**: Montgomery ladder (X25519 / Ed25519) field arithmetic core.
