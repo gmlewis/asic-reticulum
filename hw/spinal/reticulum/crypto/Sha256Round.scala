@@ -15,6 +15,9 @@ case class Sha256State() extends Bundle {
   val f = UInt(32 bits)
   val g = UInt(32 bits)
   val h = UInt(32 bits)
+
+  def toBits: Bits = Cat(a, b, c, d, e, f, g, h).asBits
+  def toVec: Vec[UInt] = Vec(a, b, c, d, e, f, g, h)
 }
 
 /**
@@ -26,6 +29,8 @@ object Sha256Functions {
   def sigma1(x: UInt): UInt = rotr(x, 6) ^ rotr(x, 11) ^ rotr(x, 25)
   def ch(e: UInt, f: UInt, g: UInt): UInt = (e & f) ^ (~e & g)
   def maj(a: UInt, b: UInt, c: UInt): UInt = (a & b) ^ (a & c) ^ (b & c)
+  def s0(x: UInt): UInt = rotr(x, 7) ^ rotr(x, 18) ^ (x |>> 3)
+  def s1(x: UInt): UInt = rotr(x, 17) ^ rotr(x, 19) ^ (x |>> 10)
 }
 
 /**

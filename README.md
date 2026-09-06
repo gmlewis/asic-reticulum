@@ -51,11 +51,18 @@ asic-reticulum/
 │   │   └── reticulum/
 │   │       ├── crypto/
 │   │       │   ├── LeadZeroCounter.scala  # Difficulty comparator for IFAC stamps
+│   │       │   ├── Sha256Constants.scala  # FIPS 180-4 H0 vector and K0..K63 constants
 │   │       │   ├── Sha256Round.scala      # Single-cycle SHA-256 compression step
-│   │       │   ├── Sha256Pipe.scala       # (Upcoming) Pipelined SHA-256 engine
+│   │       │   ├── Sha256Pipe.scala       # Pipelined SHA-256 engine with midstate restore
 │   │       │   └── Stamper.scala          # (Upcoming) Full autonomous stamp grinder
 │   │       └── bus/
 │   │           └── QspiSlave.scala        # (Upcoming) 4-bit QSPI slave with Stream interface
+│   ├── sim/                               # Table-driven simulation test suites (ScalaTest + SpinalSim)
+│   │   └── reticulum/
+│   │       └── crypto/
+│   │           ├── LeadZeroCounterTest.scala # 32-bit & 256-bit priority sweeps
+│   │           ├── Sha256RoundTest.scala     # FIPS vectors & randomized stress tests
+│   │           └── Sha256PipeTest.scala      # Pipelining, midstate restore & backpressure tests
 │   └── gen/                               # Synthesis-ready generated Verilog output
 ```
 
@@ -66,6 +73,7 @@ asic-reticulum/
 ### Prerequisites
 - **Java 17** (LTS)
 - **sbt** (Scala Build Tool)
+- **Verilator 5** (for cycle-accurate SpinalSim testbenches)
 
 On macOS:
 ```bash
@@ -84,6 +92,11 @@ startscala
 sbt compile
 ```
 
+### Running the Unit Test Suites
+```bash
+sbt test
+```
+
 ### Generating Verilog
 To generate standard, synthesis-ready Verilog into `hw/gen/`:
 
@@ -95,11 +108,16 @@ To generate standard, synthesis-ready Verilog into `hw/gen/`:
   ```bash
   sbt "runMain reticulum.crypto.Sha256RoundVerilog"
   ```
+- **Generate SHA-256 Pipelined Engine (`Sha256Pipe.v`)**:
+  ```bash
+  sbt "runMain reticulum.crypto.Sha256PipeVerilog"
+  ```
 
 Inspect the generated outputs:
 ```bash
 cat hw/gen/LeadZeroCounter.v
 cat hw/gen/Sha256Round.v
+cat hw/gen/Sha256Pipe.v
 ```
 
 ---
@@ -108,7 +126,7 @@ cat hw/gen/Sha256Round.v
 
 - [x] **Milestone 0**: Repository setup, build system (`build.sbt`), and SpinalHDL toolchain validation.
 - [x] **Milestone 1**: Core primitives — `LeadZeroCounter` and `Sha256Round`.
-- [ ] **Milestone 2**: Multi-stage pipelined SHA-256 engine with midstate restore register.
+- [x] **Milestone 2**: Multi-stage pipelined SHA-256 engine with midstate restore register.
 - [ ] **Milestone 3**: Autonomous IFAC Hashcash Stamp Grinder with nonce streaming and `meetsTarget` interrupt assertion.
 - [ ] **Milestone 4**: 4-bit QSPI slave interface (`Stream` handshake + command decoder FSM).
 - [ ] **Milestone 5**: Verification harness comparing SpinalSim / Verilator against `go-reticulum` golden test vectors.
