@@ -56,15 +56,21 @@ asic-reticulum/
 │   │       │   ├── Sha256Pipe.scala       # Pipelined SHA-256 engine with midstate restore
 │   │       │   └── Stamper.scala          # Autonomous IFAC Hashcash stamp grinder
 │   │       └── bus/
-│   │           └── QspiSlave.scala        # (Upcoming) 4-bit QSPI slave with Stream interface
-│   ├── sim/                               # Table-driven simulation test suites (ScalaTest + SpinalSim)
-│   │   └── reticulum/
-│   │       └── crypto/
-│   │           ├── LeadZeroCounterTest.scala # 32-bit & 256-bit priority sweeps
-│   │           ├── Sha256RoundTest.scala     # FIPS vectors & randomized stress tests
-│   │           ├── Sha256PipeTest.scala      # Pipelining, midstate restore & backpressure tests
-│   │           └── StamperTest.scala         # Autonomous candidate search & IRQ verification
-│   └── gen/                               # Synthesis-ready generated Verilog output
+│           ├── QspiSlave.scala          # 4-bit QSPI slave transceiver with Stream RX/TX
+│           ├── QspiCommandDecoder.scala    # Command decoder FSM & accelerator control lines
+│           └── QspiTop.scala               # Top-level 7-pin physical interface & interconnect
+├── sim/                               # Table-driven simulation test suites (ScalaTest + SpinalSim)
+│   └── reticulum/
+│       ├── crypto/
+│       │   ├── LeadZeroCounterTest.scala # 32-bit & 256-bit priority sweeps
+│       │   ├── Sha256RoundTest.scala     # FIPS vectors & randomized stress tests
+│       │   ├── Sha256PipeTest.scala      # Pipelining, midstate restore & backpressure tests
+│       │   └── StamperTest.scala         # Autonomous candidate search & IRQ verification
+│       └── bus/
+│           ├── QspiSlaveTest.scala          # Multi-byte RX/TX & CS frame reset tests
+│           ├── QspiCommandDecoderTest.scala # Opcode decoding, payload streaming & IRQ pulses
+│           └── QspiTopTest.scala            # End-to-end QSPI grinding, IRQ & readout verification
+└── gen/                               # Synthesis-ready generated Verilog output
 ```
 
 ---
@@ -117,6 +123,14 @@ To generate standard, synthesis-ready Verilog into `hw/gen/`:
   ```bash
   sbt "runMain reticulum.crypto.StamperVerilog"
   ```
+- **Generate 4-bit QSPI Slave Transceiver (`QspiSlave.v`)**:
+  ```bash
+  sbt "runMain reticulum.bus.QspiSlaveVerilog"
+  ```
+- **Generate Top-Level QSPI Crypto Engine (`QspiTop.v`)**:
+  ```bash
+  sbt "runMain reticulum.bus.QspiTopVerilog"
+  ```
 
 Inspect the generated outputs:
 ```bash
@@ -124,6 +138,8 @@ cat hw/gen/LeadZeroCounter.v
 cat hw/gen/Sha256Round.v
 cat hw/gen/Sha256Pipe.v
 cat hw/gen/Stamper.v
+cat hw/gen/QspiSlave.v
+cat hw/gen/QspiTop.v
 ```
 
 ---
@@ -134,7 +150,7 @@ cat hw/gen/Stamper.v
 - [x] **Milestone 1**: Core primitives — `LeadZeroCounter` and `Sha256Round`.
 - [x] **Milestone 2**: Multi-stage pipelined SHA-256 engine with midstate restore register.
 - [x] **Milestone 3**: Autonomous IFAC Hashcash Stamp Grinder with nonce streaming and `meetsTarget` interrupt assertion.
-- [ ] **Milestone 4**: 4-bit QSPI slave interface (`Stream` handshake + command decoder FSM).
+- [x] **Milestone 4**: 4-bit QSPI slave interface (`Stream` handshake + command decoder FSM + 7-pin `QspiTop` integration).
 - [ ] **Milestone 5**: Verification harness comparing SpinalSim / Verilator against `go-reticulum` golden test vectors.
 - [ ] **Milestone 6**: Montgomery ladder (X25519 / Ed25519) field arithmetic core.
 - [ ] **Milestone 7**: AES-128-CBC + HMAC-SHA256 Token engine.
