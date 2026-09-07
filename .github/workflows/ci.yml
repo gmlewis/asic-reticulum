@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: SpinalSim & HIL Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'sbt'
+
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Verilator & Build Essentials
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator make g++
+
+      - name: Log Environment & Toolchain Versions
+        run: |
+          echo "=== Verilator ===" && verilator --version
+          echo "=== Java ===" && java -version
+          echo "=== sbt ===" && sbt --version
+          echo "=== Python ===" && python3 --version
+
+      - name: Compile Hardware & Simulation Sources
+        run: sbt compile Test/compile
+
+      - name: Run Full Test Suite (SpinalSim + Verilator)
+        run: sbt test
+
+      - name: Run Hardware-In-The-Loop (HIL) Simulation Test
+        run: python3 tools/hil/hil_test_runner.py --sim
+
+  verilog-gen:
+    name: Verilog Netlist Generation
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'sbt'
+
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Generate All Verilog Netlists
+        run: |
+          sbt "runMain reticulum.crypto.LeadZeroCounterVerilog" \
+              "runMain reticulum.crypto.Sha256RoundVerilog" \
+              "runMain reticulum.crypto.Sha256PipeVerilog" \
+              "runMain reticulum.crypto.StamperVerilog" \
+              "runMain reticulum.crypto.FieldMultiplierVerilog" \
+              "runMain reticulum.crypto.X25519LadderVerilog" \
+              "runMain reticulum.crypto.AesCoreVerilog" \
+              "runMain reticulum.crypto.HmacSha256Verilog" \
+              "runMain reticulum.crypto.TokenEngineVerilog" \
+              "runMain reticulum.bus.QspiSlaveVerilog" \
+              "runMain reticulum.bus.QspiTopVerilog" \
+              "runMain reticulum.fpga.FpgaTopVerilog"
+
+      - name: Validate Generated Verilog Files
+        run: |
+          EXPECTED_FILES=(
+            "AesCore"
+            "FieldMultiplier"
+            "FpgaTop"
+            "HmacSha256"
+            "LeadZeroCounter"
+            "QspiSlave"
+            "QspiTop"
+            "Sha256Pipe"
+            "Sha256Round"
+            "Stamper"
+            "TokenEngine"
+            "X25519Ladder"
+          )
+          for name in "${EXPECTED_FILES[@]}"; do
+            path="hw/gen/${name}.v"
+            if [ ! -s "$path" ]; then
+              echo "ERROR: Expected non-empty file $path was not generated!"
+              exit 1
+            fi
+            echo "OK: $path ($(wc -c < "$path") bytes)"
+          done
+
+      - name: Upload Generated Verilog Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-verilog
+          path: hw/gen/*.v
+          if-no-files-found: error
