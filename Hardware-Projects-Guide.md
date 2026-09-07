@@ -40,7 +40,7 @@ Welcome to the **Reticulum Hardware Projects Guide**! This document provides eve
 | Specification | Project 1: Pocket Linux Terminal | Project 2: Pocket Communicator | Project 3: Autonomous Pocket Hub |
 | :--- | :--- | :--- | :--- |
 | **Form Factor** | Form Factor A (`pocket_terminal`) | Form Factor B (`pocket_communicator`) | Form Factor C (`pocket_hub`) |
-| **Primary Host** | Raspberry Pi Zero 2W (or SBC) | ESP32-C5 RISC-V SoC | ESP32-C5 RISC-V SoC |
+| **Primary Host** | Raspberry Pi 3A+ / Zero 2W (or SBC) | ESP32-C5 RISC-V SoC | ESP32-C5 RISC-V SoC |
 | **Operating System** | Raspberry Pi OS Lite (64-bit Linux) | Bare-metal firmware / RTOS | Bare-metal firmware / RTOS |
 | **User Interface** | 2.8" Color TFT LCD + CardKB Keyboard | 2.8" Color TFT LCD + CardKB Keyboard | **Headless** (No LCD, No Keyboard) |
 | **Networking** | LoRa + Wi-Fi client + Bluetooth | LoRa + Wi-Fi 6 + Bluetooth | LoRa + Wi-Fi 6 SoftAP Repeater |
@@ -80,7 +80,7 @@ You do not need KiCad installed to order boards. Use the pre-exported manufactur
 
 ## Project 1: The Pocket Linux Terminal (Form Factor A)
 
-The **Pocket Linux Terminal** is the ultimate handheld Reticulum computer. It boots a complete 64-bit Linux OS on a Raspberry Pi Zero 2W, starts the `gorrcd` mesh chat daemon in the background, and displays the full interactive `gonomadnet` Terminal UI on a vibrant 2.8" color screen with physical thumb-typing.
+The **Pocket Linux Terminal** is the ultimate handheld Reticulum computer. It boots a complete 64-bit Linux OS on a Raspberry Pi 3 Model A+ or Pi Zero 2W (or compatible Linux SBC), starts the `gorrcd` mesh chat daemon in the background, and displays the full interactive `gonomadnet` Terminal UI on a vibrant 2.8" color screen with physical thumb-typing.
 
 ```
 +-------------------------------------------------------------+
@@ -91,7 +91,7 @@ The **Pocket Linux Terminal** is the ultimate handheld Reticulum computer. It bo
 |  +-------------------------------------------------------+  |
 |                                                             |
 |  [Carrier PCB with SX1262 LoRa + SMA Antenna + QSPI ASIC]   |
-|  [Raspberry Pi Zero 2W (stacked underneath)]                |
+|  [Raspberry Pi 3A+ or Zero 2W (stacked underneath)]         |
 |                                                             |
 |  [M5Stack CardKB I2C Keyboard (QWERTY + Sym Keys)]          |
 +-------------------------------------------------------------+
@@ -101,7 +101,7 @@ The **Pocket Linux Terminal** is the ultimate handheld Reticulum computer. It bo
 
 | Item | Description / Model | Sourcing / Purchasing Link | Approx. Cost |
 | :--- | :--- | :--- | :--- |
-| **SBC** | Raspberry Pi Zero 2W (with headers) | [Adafruit #5291](https://www.adafruit.com/product/5291) / [Pimoroni](https://shop.pimoroni.com) | ~$15 |
+| **SBC** | Raspberry Pi 3 Model A+ *(Recommended — in-stock with headers)* OR Pi Zero 2W | [Adafruit #4027 (Pi 3A+)](https://www.adafruit.com/product/4027) / [Adafruit #5291 (Zero 2W)](https://www.adafruit.com/product/5291) | ~$15–25 |
 | **Micro-SD Card** | 16 GB or 32 GB Class 10 / A1 Micro-SD | SanDisk Ultra / Kingston (Amazon / DigiKey) | ~$6 |
 | **Carrier PCB** | Universal Reticulum Hat PCB | Fabricated via PCBWay or JLCPCB | ~$2–5 |
 | **LoRa Module** | EBYTE E22-900M22S (Semtech SX1262, +22 dBm) | LCSC `C963388` / AliExpress / Mouser | ~$7 |
@@ -111,6 +111,32 @@ The **Pocket Linux Terminal** is the ultimate handheld Reticulum computer. It bo
 | **Battery** | 1S 3.7V 1500–2500 mAh LiPo (JST-PH 2.0mm) | [Adafruit #328](https://www.adafruit.com/product/328) | ~$10 |
 | **Cable** | 4-pin STEMMA QT / Qwiic JST-SH Cable (100mm) | [Adafruit #4210](https://www.adafruit.com/product/4210) | ~$1.50 |
 | *(Optional)* **Crypto** | Tiny Tapeout 08/09/10 Carrier or Tang Primer 25K | [Tiny Tapeout](https://tinytapeout.com) / [Sipeed](https://sipeed.com) | ~$25–45 |
+
+#### In-Stock SBC Alternatives & Header Options
+
+If you are having trouble finding the Raspberry Pi Zero 2W with pre-soldered headers, consider these four readily available alternatives:
+
+1. **Raspberry Pi 3 Model A+ ($25) — Recommended & In-Stock**:
+   - **Purchasing**: Available in-stock directly from [Adafruit (Product #4027)](https://www.adafruit.com/product/4027).
+   - **Factory Headers**: Comes with the standard 40-pin GPIO male header **pre-soldered at the factory**.
+   - **Perfect Mechanical Fit**: The Pi 3A+ measures $65\text{ mm} \times 56\text{ mm}$—the **exact dimensions of the Universal Reticulum Hat PCB**. It mounts flush underneath the Hat with standard 11mm M2.5 standoffs.
+   - **Performance**: Quad-core 64-bit Broadcom BCM2837B0 Cortex-A53 @ 1.4 GHz (faster than the Pi Zero 2W), dual-band 2.4/5 GHz Wi-Fi, and BLE 4.2.
+   - **Compatibility**: 100% drop-in binary compatibility with Raspberry Pi OS Lite (64-bit) and our pre-built `pocket_terminal-linux-arm64` release binaries.
+
+2. **Bare Raspberry Pi Zero 2 W + Solderless "Hammer Headers" (~$18–$20)**:
+   - *Why Pi Zero 2W "with headers" is scarce*: Raspberry Pi never created a mass-production official "Zero 2 WH" variant; virtually all factory output is the bare unpopulated board ([Adafruit #5291](https://www.adafruit.com/product/5291), PiShop, Vilros, Micro Center).
+   - *Solderless Solution*: Pair a bare Pi Zero 2W with a set of **GPIO Hammer Headers** (e.g. [Adafruit #3662](https://www.adafruit.com/product/3662) or [Pimoroni Hammer Headers](https://shop.pimoroni.com/products/gpio-hammer-header)). These friction-fit pins gently tap into the GPIO holes using the included plastic alignment jig—giving you a sturdy 40-pin header in 60 seconds with **zero soldering required**.
+
+3. **Orange Pi Zero 2W ($18–$25)**:
+   - **Purchasing**: Widely in-stock on Amazon (often Prime eligible) and AliExpress with pre-soldered 40-pin headers.
+   - **Form Factor**: Exact $65\text{ mm} \times 30\text{ mm}$ footprint with identical 40-pin Raspberry Pi GPIO header pinout.
+   - **Specs**: Allwinner H618 quad-core 64-bit Cortex-A53 @ 1.5 GHz, 1GB–2GB RAM, Wi-Fi 5 + BLE 5.0.
+   - **Compatibility**: Runs 64-bit Armbian/Debian and directly executes our pre-compiled `pocket_terminal-linux-arm64` binaries.
+
+4. **Milk-V Duo S (RISC-V 64-bit) (~$11–$15)**:
+   - **Purchasing**: Readily available on Arace Tech and AliExpress with pre-soldered headers.
+   - **Specs**: SG2000 (1.0 GHz 64-bit RISC-V CPU, 512MB RAM, Wi-Fi 6).
+   - **Compatibility**: Fully supported by our pre-compiled `pocket_terminal-linux-riscv64` release binaries!
 
 > [!NOTE]
 > ### Why is Hardware Crypto Optional? (Software Fallback)
