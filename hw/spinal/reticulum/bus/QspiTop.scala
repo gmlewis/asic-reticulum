@@ -21,6 +21,7 @@ case class QspiTopIo() extends Bundle {
   val data_out = out Bits(4 bits)
   val data_oe  = out Bool()
   val irq_n    = out Bool()
+  val busy     = out Bool()
 }
 
 /**
@@ -37,14 +38,14 @@ case class QspiTopIo() extends Bundle {
  *  - High-speed 4-bit streaming at 20-40 MB/s wire speed.
  *  - Zero host polling via dedicated active-low hardware interrupt (irq_n).
  */
-case class QspiTop(roundsPerStage: Int = 1) extends Component {
+case class QspiTop(roundsPerStage: Int = 1, numEngines: Int = 1) extends Component {
   val io = QspiTopIo()
 
   val slave   = QspiSlave()
   val decoder = QspiCommandDecoder()
   val stamper = Stamper(roundsPerStage = roundsPerStage)
   val x25519  = X25519Ladder()
-  val token   = TokenEngine()
+  val token   = TokenEngine(numEngines = numEngines)
 
   // -------------------------------------------------------------------------
   // Physical Pad Connections
@@ -59,6 +60,7 @@ case class QspiTop(roundsPerStage: Int = 1) extends Component {
 
   // Dedicated active-low interrupt to host (asserts if Stamper OR X25519 OR Token asserts IRQ)
   io.irq_n := !(stamper.io.irq || x25519.io.irq || token.io.irq)
+  io.busy  := stamper.io.busy || x25519.io.busy || token.io.busy
 
   // -------------------------------------------------------------------------
   // QSPI Slave <-> Command Decoder Interconnect

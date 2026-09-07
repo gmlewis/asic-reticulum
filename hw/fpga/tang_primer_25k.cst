@@ -1,0 +1,53 @@
+// Physical Pin Constraints for Sipeed Tang Primer 25K (Gowin GW5A-LV25MG121)
+// Connects to ESP32-C5 host via PMOD0 header.
+
+// Onboard Clock (27 MHz Oscillator) and Reset Button
+IO_LOC "clk" E2;
+IO_PORT "clk" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "rst_n" T10;
+IO_PORT "rst_n" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// Diagnostic LEDs (Active-Low on Tang Primer 25K Dock)
+IO_LOC "io_led_heartbeat" L16;
+IO_PORT "io_led_heartbeat" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "io_led_busy" L14;
+IO_PORT "io_led_busy" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "io_led_irq" N14;
+IO_PORT "io_led_irq" IO_TYPE=LVCMOS33 DRIVE=8;
+
+// 7-Pin QSPI Interface on PMOD0 Header
+// SCLK (PMOD Pin 1)
+IO_LOC "io_qspi_sclk" A10;
+IO_PORT "io_qspi_sclk" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+
+// CS_N (PMOD Pin 2)
+IO_LOC "io_qspi_cs_n" A11;
+IO_PORT "io_qspi_cs_n" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// Data IO0 (PMOD Pin 3)
+IO_LOC "io_qspi_data_in[0]" B11;
+IO_PORT "io_qspi_data_in[0]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "io_qspi_data_out[0]" B11;
+IO_PORT "io_qspi_data_out[0]" IO_TYPE=LVCMOS33 DRIVE=8;
+
+// Data IO1 (PMOD Pin 4)
+IO_LOC "io_qspi_data_in[1]" C11;
+IO_PORT "io_qspi_data_in[1]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "io_qspi_data_out[1]" C11;
+IO_PORT "io_qspi_data_out[1]" IO_TYPE=LVCMOS33 DRIVE=8;
+
+// Data IO2 (PMOD Pin 7)
+IO_LOC "io_qspi_data_in[2]" B10;
+IO_PORT "io_qspi_data_in[2]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "io_qspi_data_out[2]" B10;
+IO_PORT "io_qspi_data_out[2]" IO_TYPE=LVCMOS33 DRIVE=8;
+
+// Data IO3 (PMOD Pin 8)
+IO_LOC "io_qspi_data_in[3]" C10;
+IO_PORT "io_qspi_data_in[3]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "io_qspi_data_out[3]" C10;
+IO_PORT "io_qspi_data_out[3]" IO_TYPE=LVCMOS33 DRIVE=8;
+
+// IRQ_N Dedicated Interrupt Line to ESP32-C5 (PMOD Pin 9)
+IO_LOC "io_qspi_irq_n" D11;
+IO_PORT "io_qspi_irq_n" IO_TYPE=LVCMOS33 DRIVE=8 PULL_MODE=NONE;

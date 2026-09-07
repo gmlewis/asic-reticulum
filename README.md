@@ -169,6 +169,10 @@ To generate standard, synthesis-ready Verilog into `hw/gen/`:
   ```bash
   sbt "runMain reticulum.bus.QspiTopVerilog"
   ```
+- **Generate FPGA Accelerator Top-Level (`FpgaTop.v`)**:
+  ```bash
+  sbt "runMain reticulum.fpga.FpgaTopVerilog"
+  ```
 
 Inspect the generated outputs:
 ```bash
@@ -183,11 +187,35 @@ cat hw/gen/HmacSha256.v
 cat hw/gen/TokenEngine.v
 cat hw/gen/QspiSlave.v
 cat hw/gen/QspiTop.v
+cat hw/gen/FpgaTop.v
 ```
 
 ---
 
-## 5. Implementation Roadmap
+## 5. FPGA & ESP32-C5 Hardware-In-The-Loop (HIL) Testbed
+
+Milestone 8 provides complete synthesis wrappers, physical pin constraints, and host firmware drivers for real-world hardware validation:
+
+- **Target FPGA Platforms**:
+  - **Sipeed Tang Primer 25K** (Gowin GW5A-25, 23k LUTs, 4x TokenEngines) — constraints in [`hw/fpga/tang_primer_25k.cst`](hw/fpga/tang_primer_25k.cst).
+  - **QMTECH AMD Artix-7** (XC7A35T / XC7A100T) — constraints in [`hw/fpga/qmtech_artix7.xdc`](hw/fpga/qmtech_artix7.xdc).
+  - Clock & timing false paths defined in [`hw/fpga/timing.sdc`](hw/fpga/timing.sdc).
+- **ESP32-C5 Host Driver** ([`fw/esp32c5/`](fw/esp32c5/)):
+  - ESP-IDF C driver using hardware GP-SPI master (`SPI2_HOST`) with GDMA channel up to 40-80 MHz.
+  - Edge-triggered interrupt handling on `IRQ_N` with zero host CPU polling.
+  - Complete self-test suite exercising X25519, 4-way Token pool, and IFAC Hashcash grinding.
+- **Automated HIL Test Runner** ([`tools/hil/hil_test_runner.py`](tools/hil/hil_test_runner.py)):
+  ```bash
+  # Hardware test over USB-UART:
+  python3 tools/hil/hil_test_runner.py --port /dev/ttyUSB0 --baud 115200
+
+  # Simulation mock test:
+  python3 tools/hil/hil_test_runner.py --sim
+  ```
+
+---
+
+## 6. Implementation Roadmap
 
 - [x] **Milestone 0**: Repository setup, build system (`build.sbt`), and SpinalHDL toolchain validation.
 - [x] **Milestone 1**: Core primitives — `LeadZeroCounter` and `Sha256Round`.
@@ -196,5 +224,6 @@ cat hw/gen/QspiTop.v
 - [x] **Milestone 4**: 4-bit QSPI slave interface (`Stream` handshake + command decoder FSM + 7-pin `QspiTop` integration).
 - [x] **Milestone 5**: Verification harness comparing SpinalSim / Verilator against `go-reticulum` golden test vectors.
 - [x] **Milestone 6**: Montgomery ladder (X25519 / Ed25519) field arithmetic core.
-- [x] **Milestone 7**: AES-128-CBC + HMAC-SHA256 Token engine.
-- [ ] **Milestone 8**: Top-level chip integration, OpenLane synthesis, and Tiny Tapeout GDS submission.
+- [x] **Milestone 7**: AES-128-CBC + HMAC-SHA256 Token engine (with parameterized multi-engine pool support).
+- [x] **Milestone 8**: FPGA emulation, synthesis, and hardware-in-the-loop (HIL) testbed with ESP32-C5.
+- [ ] **Milestone 9**: Top-level chip integration, OpenLane synthesis, and Tiny Tapeout GDS submission.
