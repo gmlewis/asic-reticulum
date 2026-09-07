@@ -1,0 +1,18 @@
+(kicad_sch
+	(version 20231120)
+	(generator "eeschema")
+	(generator_version "8.0")
+	(uuid "d14f6b21-8201-447a-9a99-f2c918361001")
+	(paper "A4")
+	(title_block
+		(title "Universal Reticulum Hat — Power Management")
+		(date "2026-09-07")
+		(rev "v1.0")
+		(company "Reticulum Network Stack / ASIC-Reticulum")
+		(comment 1 "USB-C, TP4056 LiPo Charger, Dynamic Power Path, AP2112K-3.3 LDO")
+	)
+	(text "USB-C Power Input (Type-C 16-Pin with 5.1k CC Pulldowns)" (at 25.4 25.4 0) (effects (font (size 1.5 1.5) (bold true))))
+	(text "TP4056 1A LiPo Battery Charger with Dual LED Status" (at 25.4 76.2 0) (effects (font (size 1.5 1.5) (bold true))))
+	(text "P-Channel MOSFET Auto Power-Path (DMG2305UX + BAT54C)" (at 127.0 25.4 0) (effects (font (size 1.5 1.5) (bold true))))
+	(text "Ultra-Low-Noise 3.3V 600mA LDO Regulator (AP2112K-3.3)" (at 127.0 76.2 0) (effects (font (size 1.5 1.5) (bold true))))
+)

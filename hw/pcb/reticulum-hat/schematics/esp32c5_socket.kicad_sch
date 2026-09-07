@@ -1,0 +1,17 @@
+(kicad_sch
+	(version 20231120)
+	(generator "eeschema")
+	(generator_version "8.0")
+	(uuid "d14f6b21-8201-447a-9a99-f2c918361002")
+	(paper "A4")
+	(title_block
+		(title "Universal Reticulum Hat — MCU Socket Interface")
+		(date "2026-09-07")
+		(rev "v1.0")
+		(company "Reticulum Network Stack / ASIC-Reticulum")
+		(comment 1 "Dual 22-Pin Female Headers for ESP32-C5-DevKitC-1 & Heltec V4")
+	)
+	(text "ESP32-C5-DevKitC-1 / Heltec V4 Daughterboard Socket (2.54mm Pitch, 0.9\" Spacing)" (at 25.4 25.4 0) (effects (font (size 1.5 1.5) (bold true))))
+	(text "Header J1: 3V3, EN, GPIO0..15 (QSPI Bus, LoRa SPI Bus, Status LEDs)" (at 25.4 50.8 0) (effects (font (size 1.27 1.27))))
+	(text "Header J2: GND, 5V, GPIO18..27 (I2C Keypad, Display SPI, UART Bridge)" (at 25.4 76.2 0) (effects (font (size 1.27 1.27))))
+)

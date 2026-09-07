@@ -44,6 +44,12 @@
   - [Networking, Remote Bridging & User Experience](#networking-remote-bridging--user-experience)
   - [Bill of Materials (BOM) & Sourcing Guide](#bill-of-materials-bom--sourcing-guide)
   - [Actionable Implementation Roadmap](#actionable-implementation-roadmap)
+- [Universal Reticulum Hat & Carrier PCB (Phase 1 — Schematics & Hardware Architecture)](#universal-reticulum-hat--carrier-pcb-phase-1--schematics--hardware-architecture)
+  - [Hardware Architecture & Functional Sheets](#hardware-architecture--functional-sheets)
+  - [The Heltec WiFi LoRa 32 V4 Option: Comparative Analysis](#the-heltec-wifi-lora-32-v4-option-comparative-analysis)
+  - [Pinout Multiplexing Matrix](#pinout-multiplexing-matrix-1)
+  - [Manufacturing & Assembly Guidelines: PCBWay & JLCPCB](#manufacturing--assembly-guidelines-pcbway--jlcpcb)
+  - [Verification & Fabrication Plan](#verification--fabrication-plan)
 
 ---
 
@@ -2346,3 +2352,203 @@ The handheld functions as a seamless **Internet-to-LoRa mesh gateway**:
 3. **Phase 3: Software & Firmware Deployment**:
    - **Form Factor A**: Create a pre-built SD card image for Raspberry Pi Zero 2W running Raspberry Pi OS Lite, auto-starting `gorrcd` and `gonomadnet` as systemd services on the LCD.
    - **Form Factor B**: Package `gorrcd` with ESP-IDF / TinyGo firmware for the ESP32-C5 with Wi-Fi AP provisioning, remote `TCPClientInterface`, and the lightweight Micron framebuffer driver.
+
+---
+
+# Universal Reticulum Hat & Carrier PCB (Phase 1 — Schematics & Hardware Architecture)
+
+## Overview & Scope
+
+Phase 1 provides the complete, production-ready electrical schematic and hardware design for the **Universal Reticulum Hat & Carrier PCB** in `asic-reticulum` (`hw/pcb/reticulum-hat`).
+
+This board bridges open-source silicon acceleration, physical off-grid radio networking, and handheld human interfaces, creating a unified hardware substrate that supports **both Form Factor A (Pocket Linux SBC)** and **Form Factor B (Standalone ESP32-C5 Communicator)** from a single manufactured PCB.
+
+```
++--------------------------------------------------------------------------+
+|                  Universal Reticulum Hat & Carrier PCB                   |
+|                                                                          |
+|  [Power System]         [MCU Socket: ESP32-C5 / Heltec V4]               |
+|  - USB-C with PD 5.1k   - Dual 22-pin Female Headers (0.9" spacing)       |
+|  - TP4056 / AXP2101     - Directly seats ESP32-C5-DevKitC-1 or Heltec V4 |
+|  - Auto Power Path      - Local 3.3V Decoupling Caps                     |
+|  - AP2112K-3.3 LDO                                                       |
+|                                                                          |
+|  [LoRa RF Subsystem]    [Crypto Accelerator Header]                      |
+|  - EBYTE E22-900M22S    - 2x5 (10-pin) Header (7-pin QSPI + IRQ#)        |
+|  - Semtech SX1262       - Mates with Tiny Tapeout or Tang Primer 25K     |
+|  - 50-ohm SMA Jack                                                       |
+|                                                                          |
+|  [Display & Keypad]     [Raspberry Pi Bottom Stacking Header]            |
+|  - 8-pin / FPC ST7789   - 40-Pin Female Stacking Header (HAT standard)   |
+|  - STEMMA QT / CardKB   - Mates to Pi Zero 2W or Milk-V Duo S underneath |
++--------------------------------------------------------------------------+
+```
+
+---
+
+## Hardware Architecture & Functional Sheets
+
+The design is partitioned into modular, hierarchical KiCad 8 schematic sheets:
+
+### 1. Root Schematic (`reticulum-hat.kicad_sch`)
+- Integrates all sub-sheets and defines inter-sheet global signal buses (`QSPI_BUS`, `LORA_SPI`, `I2C_BUS`, `LCD_SPI`, `POWER_BUS`).
+- Connects status indicator LEDs and hardware jumper blocks.
+
+### 2. Power Subsystem (`schematics/power.kicad_sch`)
+- **USB Type-C Receptacle**: 16-pin USB-C connector with $5.1\text{ k}\Omega \pm 1\%$ pulldowns on `CC1` and `CC2` (guarantees negotiation with modern USB-C Power Delivery wall adapters and power banks).
+- **LiPo Battery Charger**: TP4056 1A linear charging controller (or MCP73831):
+  - Configured with $R_{\text{PROG}} = 1.66\text{ k}\Omega$ for a safe $750\text{ mA}$ charge current.
+  - Dual status LEDs: Red (`CHG_ACTIVE`) and Green (`CHG_DONE`).
+  - Standard 2-pin JST-PH ($2.0\text{ mm}$ pitch) battery connector.
+- **Dynamic Power Path Management**:
+  - P-channel MOSFET (DMG2305UX / AO3401A, $R_{DS(on)} < 45\text{ m}\Omega$) paired with a low-drop Schottky diode (SS14 / BAT54C).
+  - When USB-C is connected, the P-FET turns off, powering the system directly from USB 5V while simultaneously charging the battery.
+  - When USB-C is disconnected, the gate is pulled low by a $100\text{ k}\Omega$ resistor, seamlessly transferring load to the battery without system reset or voltage dropouts.
+- **Ultra-Low-Noise 3.3V LDO**:
+  - Diodes Inc. **AP2112K-3.3** ($600\text{ mA}$ continuous, $250\text{ mV}$ dropout at full load, ultra-low quiescent current $< 2\ \mu\text{A}$ for maximum standby battery life).
+  - Filtered by $10\ \mu\text{F}$ input/output ceramic capacitors and $100\text{ nF}$ high-frequency bypass capacitors.
+- **Hardware Power Switch**: Miniature SPDT slide switch (EG1218 / JS202011SCQN) interrupting the main VCC bus.
+
+### 3. MCU Daughterboard Socket (`schematics/esp32c5_socket.kicad_sch`)
+- Dual 22-pin female $2.54\text{ mm}$ ($0.1''$) header rows spaced $22.86\text{ mm}$ ($0.9''$) apart.
+- Accepts the **ESP32-C5-DevKitC-1** directly.
+- Breaks out all 24 GPIOs, 3.3V, 5V, GND, EN, and BOOT pins.
+
+### 4. Raspberry Pi 40-Pin Header (`schematics/pi_header.kicad_sch`)
+- 40-pin female stacking header conforming to the Raspberry Pi Foundation HAT mechanical specification.
+- Exposes:
+  - 5V and 3.3V system power rails.
+  - `I2C1` (GPIO 2/SDA, GPIO 3/SCL) connected to STEMMA QT / Qwiic keyboard port.
+  - `SPI0` (GPIO 10/MOSI, GPIO 9/MISO, GPIO 11/SCLK, GPIO 8/CE0) connected to SX1262 LoRa module.
+  - `UART0` (GPIO 14/TXD, GPIO 15/RXD) routed to ESP32-C5 for inter-chip bridging.
+  - GPIO interrupts: GPIO 25 (LoRa DIO1), GPIO 24 (QSPI IRQ#).
+
+### 5. LoRa Radio Subsystem (`schematics/lora_sx1262.kicad_sch`)
+- **Module**: EBYTE E22-900M22S castellated SMD module (Semtech SX1262, up to +22 dBm / 160 mW).
+- **SPI Interface**: Dedicated SPI bus (`SCK`, `MOSI`, `MISO`, `NSS`).
+- **Control**: `BUSY` line, `RESET` line, and `DIO1` packet-ready interrupt.
+- **RF Path**: $50\ \Omega$ coplanar waveguide with ground stitching leading to an edge-mount female SMA jack. Includes secondary footprint for miniature u.FL (IPEX) connector for internal patch antennas.
+
+### 6. Cryptographic Accelerator Socket (`schematics/crypto_socket.kicad_sch`)
+- Standard dual-row $2\times 5$ ($10\text{-pin}$) $2.54\text{ mm}$ header:
+  ```
+  Pin 1: SCLK      Pin 2: CS#
+  Pin 3: IO0       Pin 4: IO1
+  Pin 5: IO2       Pin 6: IO3
+  Pin 7: IRQ#      Pin 8: RST#
+  Pin 9: 3.3V      Pin 10: GND
+  ```
+- Directly mates with:
+  - **Tiny Tapeout 08/09/10** chip carrier demo board.
+  - **Sipeed Tang Primer 25K PMOD** ribbon cable.
+- $10\text{ k}\Omega$ pull-up resistor on active-low `IRQ#` line.
+
+### 7. Display & Keypad (`schematics/display_keypad.kicad_sch`)
+- **Display Interface**:
+  - 8-pin $2.54\text{ mm}$ header for breadboard-friendly 2.8" SPI TFT modules (ST7789 or ILI9341).
+  - 14-pin $0.5\text{ mm}$ pitch FPC connector for slim handheld assembly.
+  - 2N3904 NPN transistor for PWM backlight dimming.
+- **Keypad Interface**:
+  - 4-pin JST-SH $1.0\text{ mm}$ STEMMA QT / Qwiic connector (3.3V, GND, SDA, SCL) with $4.7\text{ k}\Omega$ pull-ups.
+  - Companion $1\times 4$ $2.54\text{ mm}$ header for direct jumper wire attachment to M5Stack CardKB or Solder Party BB Q10.
+
+### 8. Bus Routing & Multiplexing (`schematics/bus_mux.kicad_sch`)
+- 3-pin solder jumpers (`JP_LORA`, `JP_LCD`, `JP_I2C`, `JP_CRYPTO`) allowing user configuration between:
+  - **Mode A (Linux Host)**: Raspberry Pi acts as master for LoRa, LCD, and Keyboard; ESP32-C5 acts as Wi-Fi SoftAP coprocessor.
+  - **Mode B (MCU Host)**: ESP32-C5 acts as master for all peripherals directly.
+
+---
+
+## The Heltec WiFi LoRa 32 V4 Option: Comparative Analysis
+
+The **Heltec WiFi LoRa 32 V4** is a popular off-the-shelf ESP32 LoRa development board. Here is how it compares with our primary **ESP32-C5 + E22-900M22S** architecture:
+
+| Feature | Primary Architecture: ESP32-C5 + E22-900M22S | Alternative Option: Heltec WiFi LoRa 32 V4 |
+| :--- | :--- | :--- |
+| **Microcontroller** | **ESP32-C5** (Single-core RISC-V @ 240 MHz) | **ESP32-S3R2** (Dual-core Xtensa LX7 @ 240 MHz) |
+| **Wi-Fi Subsystem** | **Dual-Band Wi-Fi 6 (2.4 GHz + 5.0 GHz)** | **Single-Band Wi-Fi 4 (2.4 GHz only)** |
+| **RF Coexistence** | **Zero RF Interference**: 5 GHz Wi-Fi AP does not collide with 2.4 GHz mesh or LoRa harmonics | 2.4 GHz Wi-Fi shares spectrum with Bluetooth and mesh radio harmonics |
+| **PSRAM / Memory** | Up to 8–16 MB OPI PSRAM | 2 MB Quad-SPI PSRAM |
+| **LoRa Transceiver** | Semtech SX1262 (+22 dBm / 160 mW) | Semtech SX1262 + Power Amp (**+28±1 dBm / ~630 mW**) |
+| **Onboard Display** | Modular 2.8" Color TFT LCD ($320\times 240$) | Built-in 0.96" Monochrome OLED ($128\times 64$) |
+| **Open Source Toolchain** | Unencumbered GCC/Clang RISC-V | Xtensa toolchain |
+| **Hardware Form** | Modular socket (DevKit + castellated LoRa) | All-in-one pre-assembled board with antenna & solar port |
+
+### How the Universal Hat Supports Heltec V4:
+The **Heltec V4 is an excellent, high-power alternative** for users who already own one or want +28 dBm high-power LoRa transmission.
+
+The Universal Reticulum Hat accommodates the Heltec V4 via two design provisions:
+1. **Dual Header Pinout Compatibility**: The 40-pin dual female socket footprint can be routed to accept either the ESP32-C5-DevKitC-1 or the Heltec WiFi LoRa 32 V3/V4 pinout.
+2. **Modular RF Bypass**: When a Heltec V4 is plugged in, the Hat's onboard EBYTE E22 footprint is left unpopulated; the Heltec board provides its own +28 dBm SX1262 and antenna jack, while the Hat provides the **7-pin QSPI Crypto Accelerator Socket (Tiny Tapeout ASIC / Tang Primer FPGA)**, **CardKB I2C Keyboard**, and **Raspberry Pi 40-pin mating header**!
+
+---
+
+## Pinout Multiplexing Matrix
+
+| Peripheral Signal | Form Factor A (Pi Zero 2W Host) | Form Factor B (ESP32-C5 Host) | Alternative (Heltec V4 Host) | Function Description |
+| :--- | :---: | :---: | :---: | :--- |
+| **LoRa SCK** | Pi GPIO 11 (SPI0_SCLK) | ESP32-C5 `GPIO 10` | Heltec Internal (GPIO 9) | 10 MHz LoRa SPI Clock |
+| **LoRa MOSI** | Pi GPIO 10 (SPI0_MOSI) | ESP32-C5 `GPIO 11` | Heltec Internal (GPIO 10) | LoRa SPI MOSI |
+| **LoRa MISO** | Pi GPIO 9 (SPI0_MISO) | ESP32-C5 `GPIO 12` | Heltec Internal (GPIO 11) | LoRa SPI MISO |
+| **LoRa NSS** | Pi GPIO 8 (SPI0_CE0) | ESP32-C5 `GPIO 13` | Heltec Internal (GPIO 8) | LoRa Chip Select |
+| **LoRa BUSY** | Pi GPIO 22 | ESP32-C5 `GPIO 14` | Heltec Internal (GPIO 13) | RF Busy Status |
+| **LoRa DIO1** | Pi GPIO 25 (EXT_INT) | ESP32-C5 `GPIO 15` | Heltec Internal (GPIO 14) | Packet RX/TX Interrupt |
+| **Crypto SCLK** | Pi GPIO 21 | ESP32-C5 `GPIO 6` | Heltec `GPIO 41` | QSPI Bus Clock (40–80 MHz) |
+| **Crypto CS#** | Pi GPIO 20 | ESP32-C5 `GPIO 7` | Heltec `GPIO 42` | QSPI Chip Select |
+| **Crypto IO0** | Pi GPIO 16 | ESP32-C5 `GPIO 2` | Heltec `GPIO 45` | QSPI Data Bit 0 (MOSI) |
+| **Crypto IO1** | Pi GPIO 19 | ESP32-C5 `GPIO 3` | Heltec `GPIO 46` | QSPI Data Bit 1 (MISO) |
+| **Crypto IO2** | Pi GPIO 26 | ESP32-C5 `GPIO 4` | Heltec `GPIO 47` | QSPI Data Bit 2 (WP#) |
+| **Crypto IO3** | Pi GPIO 27 | ESP32-C5 `GPIO 5` | Heltec `GPIO 48` | QSPI Data Bit 3 (HOLD#) |
+| **Crypto IRQ#** | Pi GPIO 24 (EXT_INT) | ESP32-C5 `GPIO 8` | Heltec `GPIO 39` | Active-low Completion IRQ |
+| **Keypad SDA** | Pi GPIO 2 (I2C1_SDA) | ESP32-C5 `GPIO 18` | Heltec `GPIO 17` | STEMMA QT I2C Data |
+| **Keypad SCL** | Pi GPIO 3 (I2C1_SCL) | ESP32-C5 `GPIO 19` | Heltec `GPIO 18` | STEMMA QT I2C Clock |
+| **LCD CS** | Pi GPIO 7 (SPI0_CE1) | ESP32-C5 `GPIO 20` | Heltec `GPIO 38` | Display Chip Select |
+| **LCD DC** | Pi GPIO 17 | ESP32-C5 `GPIO 21` | Heltec `GPIO 37` | Data / Command Select |
+| **LCD RST** | Pi GPIO 4 | ESP32-C5 `GPIO 22` | Heltec `GPIO 36` | Display Hardware Reset |
+| **LCD BL PWM** | Pi GPIO 18 (PWM0) | ESP32-C5 `GPIO 23` | Heltec `GPIO 35` | Backlight PWM Dimming |
+
+---
+
+## Manufacturing & Assembly Guidelines: PCBWay & JLCPCB
+
+The hardware files are formatted to allow 1-click ordering from **both PCBWay and JLCPCB**:
+
+### 1. PCBWay Manufacturing Specifications
+- **Layer Count**: 2-layer FR-4 (or 4-layer if preferred for ultra-clean RF ground planes).
+- **Board Dimensions**: $65.0\text{ mm} \times 56.0\text{ mm}$ (Standard Raspberry Pi HAT with rounded corners and mounting holes).
+- **Board Thickness**: $1.6\text{ mm}$.
+- **Copper Weight**: 1 oz ($35\ \mu\text{m}$).
+- **Surface Finish**: **ENIG (Electroless Nickel Immersion Gold)** — recommended for the edge-mount SMA high-frequency RF pads and surface-mount castellated LoRa pins.
+- **Solder Mask**: Matte Black or Classic Green with white silkscreen.
+- **Minimum Trace / Space**: $6\text{ mil} / 6\text{ mil}$ ($0.152\text{ mm}$).
+- **Minimum Drill**: $0.3\text{ mm}$.
+- **Turnkey SMT Assembly**: PCBWay can assemble all passive components, LDO regulator, power path MOSFET, TP4056 charger, and USB-C connector directly from their turnkey BOM matching service.
+
+### 2. JLCPCB Manufacturing & SMT Specifications
+- **Base PCB**: 2-layer FR-4, $1.6\text{ mm}$, LeadFree HASL or ENIG.
+- **SMT Parts Library Matching (JLCPCB LCSC Parts)**:
+  - USB-C Connector: `C165948` (16-pin TYPE-C SMD).
+  - AP2112K-3.3TRG1 (LDO): `C52924` (SOT-23-5, Basic Part).
+  - TP4056 (LiPo Charger): `C16581` (SOP-8, Basic Part).
+  - DMG2305UX (P-MOSFET): `C84411` (SOT-23, Basic Part).
+  - BAT54C (Schottky Diode): `C2198` (SOT-23, Basic Part).
+  - $10\ \mu\text{F}$ 0805 MLCC Capacitors: `C15850` (Basic Part).
+  - $100\text{ nF}$ 0603 Bypass Capacitors: `C14663` (Basic Part).
+  - $5.1\text{ k}\Omega$ 0603 Resistors: `C23186` (Basic Part).
+  - $4.7\text{ k}\Omega$ 0603 I2C Pullups: `C23162` (Basic Part).
+  - JST-PH 2.0mm Battery Jack: `C23769` (SMD / Through-hole).
+  - 4-Pin STEMMA QT / Qwiic (JST-SH 1.0mm): `C145946`.
+- **Automated Output**: Export Gerber, IPC-D-356 netlist, BOM CSV (with LCSC part numbers), and CPL (Centroid Pick-and-Place) files.
+
+---
+
+## Verification & Fabrication Plan
+
+1. **KiCad Electrical Rules Check (ERC)**:
+   - Zero net collisions, zero un-driven inputs, all power pins properly bypassed.
+2. **Netlist Verification**:
+   - Validate 100% netlist matching between top-level schematic and all sub-sheets.
+3. **BOM & Footprint Validation**:
+   - Cross-check that every component footprint has active stock on both LCSC (for JLCPCB) and DigiKey/Mouser (for PCBWay).
+4. **Mechanical Standoff Alignment**:
+   - Confirm mounting hole coordinates match Raspberry Pi HAT mechanical standards ($58.0\text{ mm} \times 49.0\text{ mm}$ rectangular pattern, $M2.5$ screw holes).

@@ -1,0 +1,43 @@
+Comment,Designator,Footprint,LCSC Part #,Quantity,Type
+USB-C 16-Pin Receptacle,J_USB,USB-C-16P-SMD,C165948,1,Connector
+TP4056 1A LiPo Charger,U_CHG,SOIC-8_3.9x4.9mm_P1.27mm,C16581,1,IC
+AP2112K-3.3TRG1 600mA LDO,U_REG,SOT-23-5,C52924,1,IC
+DMG2305UX P-MOSFET,Q_PWR,SOT-23,C84411,1,Transistor
+BAT54C Dual Schottky Diode,D_PWR,SOT-23,C2198,1,Diode
+JST-PH 2.0mm 2-Pin Male Header,J_BAT,JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical,C23769,1,Connector
+Red LED 0603,LED_CHG,LED_0603_1608Metric,C2286,1,Opto
+Green LED 0603,LED_DONE,LED_0603_1608Metric,C2290,1,Opto
+5.1k 1% Resistor,R_CC1,R_0603_1608Metric,C23186,1,Resistor
+5.1k 1% Resistor,R_CC2,R_0603_1608Metric,C23186,1,Resistor
+1.2k 1% Resistor,R_PROG,R_0603_1608Metric,C22787,1,Resistor
+1.0k 1% Resistor,R_LED1,R_0603_1608Metric,C21190,1,Resistor
+1.0k 1% Resistor,R_LED2,R_0603_1608Metric,C21190,1,Resistor
+100k 5% Resistor,R_GATE,R_0603_1608Metric,C25804,1,Resistor
+10uF 16V Ceramic Cap,C_IN1,C_0805_2012Metric,C15850,1,Capacitor
+10uF 16V Ceramic Cap,C_OUT1,C_0805_2012Metric,C15850,1,Capacitor
+100nF 25V Ceramic Cap,C_DEC1,C_0603_1608Metric,C14663,1,Capacitor
+100nF 25V Ceramic Cap,C_DEC2,C_0603_1608Metric,C14663,1,Capacitor
+100nF 25V Ceramic Cap,C_DEC3,C_0603_1608Metric,C14663,1,Capacitor
+100nF 25V Ceramic Cap,C_DEC4,C_0603_1608Metric,C14663,1,Capacitor
+EBYTE E22-900M22S SX1262 LoRa,U_LORA,Module_E22-900M22S,C963388,1,Module
+SMA Female Edge-Mount Jack,J_SMA,Connector_Coaxial:SMA_Amphenol_132136_EdgeMount,C112398,1,Connector
+IPEX / u.FL SMD Connector,J_UFL,U.FL-R-SMT-1,C14878,1,Connector
+10uF 16V Ceramic Cap,C_RF1,C_0805_2012Metric,C15850,1,Capacitor
+100nF 25V Ceramic Cap,C_RF2,C_0603_1608Metric,C14663,1,Capacitor
+100k 5% Resistor,R_DIO1,R_0603_1608Metric,C25804,1,Resistor
+2x5 2.54mm Box Header,J_CRYPTO,PinHeader_2x05_P2.54mm_Vertical,C2883734,1,Connector
+10k 1% Resistor,R_IRQ,R_0603_1608Metric,C25803,1,Resistor
+100nF 25V Ceramic Cap,C_CRP,C_0603_1608Metric,C14663,1,Capacitor
+1x8 2.54mm Female Header,J_LCD,PinSocket_1x08_P2.54mm_Vertical,C224364,1,Connector
+14-Pin 0.5mm FPC Connector,J_FPC,Hirose_FH12-14S-0.5SH_1x14-1MP_P0.50mm_Horizontal,C145558,1,Connector
+2N3904 NPN BJT,Q_BL,SOT-23,C2137,1,Transistor
+1.0k 1% Resistor,R_BL,R_0603_1608Metric,C21190,1,Resistor
+4-Pin JST-SH STEMMA QT,J_STEMMA,JST_SH_SM04B-SRSS-TB_1x04-1MP_P1.00mm_Horizontal,C145946,1,Connector
+1x4 2.54mm Male Header,J_KB,PinHeader_1x04_P2.54mm_Vertical,C224360,1,Connector
+4.7k 1% Resistor,R_PU1,R_0603_1608Metric,C23162,1,Resistor
+4.7k 1% Resistor,R_PU2,R_0603_1608Metric,C23162,1,Resistor
+2x20 Extra-Tall Female Stacking Header,J_PI,PinSocket_2x20_P2.54mm_Vertical_Extended,C224369,1,Connector
+1x22 2.54mm Female Header Left,J_MCU_L,PinSocket_1x22_P2.54mm_Vertical,C224378,1,Connector
+1x22 2.54mm Female Header Right,J_MCU_R,PinSocket_1x22_P2.54mm_Vertical,C224378,1,Connector
+1x3 2.54mm Male Header,JP1..JP19,PinHeader_1x03_P2.54mm_Vertical,C224359,19,Connector
+2.54mm Shunt Jumper (Black),SHUNTS,Jumper_2.54mm_Shunt,C2902344,19,Accessory
