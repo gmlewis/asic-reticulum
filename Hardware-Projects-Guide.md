@@ -3,8 +3,9 @@
 Welcome to the **Reticulum Hardware Projects Guide**! This document provides everything you need to build, assemble, flash, and operate the three standalone off-grid hardware projects supported by [`go-reticulum`](https://github.com/gmlewis/go-reticulum) and [`go-nomadnet`](https://github.com/gmlewis/go-nomadnet), accelerated by the open-source silicon coprocessor in [`asic-reticulum`](https://github.com/gmlewis/asic-reticulum).
 
 > [!NOTE]
-> **No compiler toolchains or source code cloning required!**
-> Every executable and firmware artifact referenced in this guide is pre-compiled and downloadable directly from GitHub Releases. You can build these projects using only a web browser, standard flashing tools (`esptool.py`, Raspberry Pi Imager), and simple hand assembly.
+> **No compiler toolchains, Python scripts, or source code cloning required!**
+> Every executable and firmware artifact referenced in this guide is pre-compiled and downloadable directly from GitHub Releases.
+> For microcontrollers (ESP32-C5 and Heltec V4 in Projects 2 and 3), you can flash firmware **directly from your web browser** with zero installation using in-browser Web Serial tools like [ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/) or the [Espressif Web Flasher](https://espressif.github.io/esptool-js/).
 
 ---
 
@@ -257,12 +258,33 @@ If using the Universal Hat in Mode B:
 
 ### 4. Flashing & First Boot
 
-1. Connect the ESP32-C5 (or Heltec V4) to your computer using a USB-C data cable.
-2. Install `esptool` if you don't already have it:
+You have two easy ways to flash the firmware onto the ESP32-C5 or Heltec V4:
+
+#### Method A: In-Browser Web Flasher (Zero-Install — Recommended)
+
+You do **not** need Python, `pip`, or command-line tools installed. You can flash the board directly from your web browser using the Web Serial API (supported in Google Chrome, Microsoft Edge, Brave, and Opera):
+
+1. Connect the ESP32-C5 or Heltec V4 to your computer using a USB-C data cable.
+2. Open either of these web flashers in a supported browser:
+   - **[ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/)** *(simple drag-and-drop web flasher)*
+   - **[Espressif Official Web Flasher (esptool-js)](https://espressif.github.io/esptool-js/)** *(official Espressif Web Serial tool)*
+   - **[Adafruit WebSerial ESPTool](https://adafruit.github.io/Adafruit_WebSerial_ESPTool/)**
+3. Click **Connect** (or "Connect to ESP"). A browser popup will appear listing connected USB serial devices.
+4. Select your board (e.g. `USB JTAG/serial debug unit`, `CP2102`, or `CH340`) and click **Connect**.
+5. Set the Flash Offset to **`0x0`** and click **Choose File** (or "Browse") to select `pocket_communicator-esp32c5-firmware.bin`.
+6. Click **Program** (or **Flash**). The web flasher will erase the flash, write the firmware with a live progress bar, and verify the checksum.
+7. Once flashing reaches 100%, press the **RESET (EN)** button on the ESP32 board. The communicator will boot immediately!
+
+#### Method B: Command-Line Flashing via `esptool.py`
+
+For terminal enthusiasts or headless environments:
+
+1. Connect the board via USB-C.
+2. Install `esptool` if not already installed:
    ```bash
    pip install esptool
    ```
-3. Flash the device using `esptool.py` (replace `/dev/ttyUSB0` with your serial device, e.g. `/dev/tty.usbmodem*` on macOS):
+3. Flash the firmware (replace `/dev/ttyUSB0` with your serial device, e.g. `/dev/tty.usbmodem*` on macOS):
    ```bash
    esptool.py --chip esp32c5 -p /dev/ttyUSB0 -b 921600 write_flash 0x0 pocket_communicator-esp32c5-firmware.bin
    ```
@@ -325,12 +347,20 @@ curl -LO https://github.com/gmlewis/go-reticulum/releases/latest/download/rrcd.t
 
 ### 4. Flashing & Initial Operation
 
-1. Connect the ESP32-C5 via USB-C to your computer.
-2. Flash the firmware:
-   ```bash
-   esptool.py --chip esp32c5 -p /dev/ttyUSB0 -b 921600 write_flash 0x0 gorrcd-pocket_hub-esp32c5-firmware.bin
-   ```
-3. Disconnect from your computer and power from the battery.
+#### Method A: In-Browser Web Flasher (Zero-Install — Recommended)
+
+1. Connect the ESP32-C5 (or Heltec V4) to your computer via USB-C.
+2. Open **[ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/)** or **[Espressif Web Flasher](https://espressif.github.io/esptool-js/)** in Google Chrome, Microsoft Edge, Brave, or Opera.
+3. Click **Connect** and select your ESP32 serial port.
+4. Set Flash Offset to **`0x0`** and select the downloaded file `gorrcd-pocket_hub-esp32c5-firmware.bin`.
+5. Click **Program / Flash**.
+6. When complete, disconnect from your computer and connect your LiPo battery or solar power source.
+
+#### Method B: Command-Line Flashing via `esptool.py`
+
+```bash
+esptool.py --chip esp32c5 -p /dev/ttyUSB0 -b 921600 write_flash 0x0 gorrcd-pocket_hub-esp32c5-firmware.bin
+```
 4. The hub boots in 150 ms, begins transmitting Reticulum announces on LoRa (`rrc.hub`), and broadcasts a Wi-Fi 6 access point:
    - **SSID**: `Reticulum-Hub-XXXX` *(where XXXX is the last 4 hex digits of the hub identity)*
    - **Default Password**: `reticulum` (or open, as configured in `rrcd.toml`)

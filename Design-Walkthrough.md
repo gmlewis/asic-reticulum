@@ -2584,7 +2584,7 @@ To inspect, verify, simulate, and test these designs on macOS, the following too
 
 ### 3. FPGA & Firmware Bring-Up (Form Factor B & Tang Primer 25K)
 - **openFPGALoader (`brew install openfpgaloader`)**: Open-source, vendor-independent programmer that flashes bitstreams directly to the Gowin Tang Primer 25K (GW5A) over USB without proprietary drivers.
-- **esptool (`python3 -m pip install esptool`)**: Flashing and ROM inspection utility for ESP32-C5 and Heltec V4.
+- **esptool (`python3 -m pip install esptool`) & Web Flashers ([ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/), [Espressif Web Flasher](https://espressif.github.io/esptool-js/))**: In-browser zero-install Web Serial tools and CLI utility for flashing and ROM inspection of ESP32-C5 and Heltec V4.
 - **tio (`brew install tio`)**: Modern serial terminal with auto-reconnect, hex dump, and timestamping for logging UART debug streams.
 
 ---
