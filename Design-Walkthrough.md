@@ -2131,11 +2131,12 @@ Measurements taken at 50 MHz ASIC / FPGA clock frequency compared against an ESP
 
 ---
 
-# DIY Handheld Implementations: Form Factor A & Form Factor B
+# DIY Handheld & Hub Implementations: Form Factors A, B, and C
 
-This section provides the complete blueprint for realizing the Reticulum Hardware Crypto Accelerator in an open-source, maker-friendly DIY handheld communicator. The design is split into two complementary hardware form factors sharing a unified modular architecture:
-- **Form Factor A**: A **Linux-based handheld terminal** pairing an inexpensive SBC (Raspberry Pi Zero 2W or Milk-V Duo S) with a custom **PCBWay Reticulum Hat**, running the full interactive `gonomadnet` TUI and `gorrcd` daemon today with zero software modifications.
-- **Form Factor B**: A **standalone ultra-low-power microcontroller handheld** powered by the **ESP32-C5**, functioning as an autonomous pocket chat hub and off-grid communicator with weeks of standby battery life.
+This section provides the complete blueprint for realizing the Reticulum Hardware Crypto Accelerator in three complementary hardware targets sharing a unified modular architecture:
+- **Form Factor A (Pocket Terminal / `pocket_terminal`)**: A **Linux-based handheld terminal** pairing an inexpensive SBC (Raspberry Pi Zero 2W or Milk-V Duo S) with the **Universal Reticulum Hat**, running the full interactive `gonomadnet` TUI and `gorrcd` daemon today with zero software modifications.
+- **Form Factor B (Pocket Communicator / `pocket_communicator`)**: A **standalone ultra-low-power microcontroller handheld** powered by the **ESP32-C5** with a 2.8" SPI LCD and QWERTY keypad, running an embedded display-agnostic `gonomadnet` node with weeks of standby battery life.
+- **Form Factor C (Pocket Hub / `pocket_hub`)**: An **autonomous headless chat hub & packet repeater** powered by the **ESP32-C5** with dual-band Wi-Fi 6 AP and SX1262 LoRa radio (**NO display, NO keyboard**), compiling and running standalone **`gorrcd` ONLY** for zero-maintenance deployment in backpacks, vehicles, or outdoor weatherproof enclosures.
 
 ---
 
@@ -2231,9 +2232,13 @@ Form Factor B is an ultra-low-power, instant-boot handheld built entirely around
 
 ---
 
-## Universal PCBWay Hat & Carrier Board Specification
+## Universal Reticulum Hat & Carrier Board Specification
 
-To enable makers to build **either Form Factor A or Form Factor B** from a single modular PCB design, the board is laid out as a **Universal Reticulum Hat & Carrier**:
+To enable makers to build **Form Factor A, Form Factor B, or Form Factor C** from a single modular PCB design, the board is laid out as a **Universal Reticulum Hat & Carrier**:
+- **Form Factor A (Pocket Terminal)**: Pi Zero 2W + Hat + LCD + CardKB + LoRa + Crypto PMOD.
+- **Form Factor B (Pocket Communicator)**: ESP32-C5 + Hat + LCD + CardKB + LoRa + Crypto PMOD.
+- **Form Factor C (Pocket Hub)**: ESP32-C5 + Hat + LoRa + Crypto PMOD (Display and Keypad headers left unpopulated).
+
 
 ### 1. Board Geometry & Sockets
 - **Dimensions**: Standard 65 mm × 56 mm (Raspberry Pi HAT form factor with mounting holes).
