@@ -9,3 +9,7 @@ project/project/
 simWorkspace/
 hw/gen/
 .DS_Store
+sim_build/
+*.vcd
+results.xml
+__pycache__/

@@ -2654,3 +2654,205 @@ To inspect, verify, simulate, and test these designs on macOS, the following too
   - Edge cut dimension check ($65.0\text{ mm} \times 56.0\text{ mm}$).
 - Validate `BOM.csv` and `centroid.csv` syntax against JLCPCB and PCBWay SMT quotation parsers.
 
+---
+
+# Phase 2 Walkthrough: PCB Layout, 50-Ohm Waveguide, Tooling Installation, and Fabrication Packaging
+
+## Overview
+
+Phase 2 completes the physical implementation and verification of the Universal Reticulum Hat & Carrier PCB in `asic-reticulum/hw/pcb/reticulum-hat/`:
+1. **Installed Analysis & Testing Tool Suite**: Configured KiCad 10 suite, `kicad-cli`, `gerbv`, `ngspice-47`, `openfpgaloader`, `tio`, `gtkwave`, `InteractiveHtmlBom`, and `esptool`.
+2. **SPICE Power-Path Simulation**: Simulated the DMG2305UX / BAT54C automatic power-path switchover under dynamic 500mA load.
+3. **Physical PCB Layout (`reticulum-hat.kicad_pcb`)**: 2-layer FR-4 board ($65.0\text{ mm} \times 56.0\text{ mm}$), $3.5\text{ mm}$ rounded corners, Raspberry Pi HAT $M2.5$ mounting holes, 50-ohm coplanar waveguide with ground for the SX1262 LoRa radio, solid ground plane, and dedicated component zones.
+4. **Turnkey Fabrication Package (`gerbers/`)**: Exported Gerbers, drill files, IPC-D-356 netlist, centroid pick-and-place list, SVG vector preview, and `Gerber_Universal_Reticulum_Hat_v1.0.zip` ready for 1-click upload to PCBWay and JLCPCB.
+
+---
+
+## 1. Verified Tool Suite Installation
+
+| Tool | Version | Purpose & Verification |
+| :--- | :---: | :--- |
+| **KiCad & kicad-cli** | `v10.0.6` | Full graphical suite in `/Applications/KiCad` and CLI linked to `/opt/homebrew/bin/kicad-cli`. Verified with `kicad-cli version`. |
+| **gerbv** | `v4.0 (2.11.1)` | Standalone Gerber viewer. Verified by rendering headless PNG preview `gerbers/preview.png`. |
+| **ngspice** | `v47` | Berkeley SPICE transient solver. Verified by running `sim/power_path_sim.cir`. |
+| **openFPGALoader** | `v1.1.1` | Direct USB bitstream programmer for Gowin Tang Primer 25K (GW5A). Verified with `openfpgaloader -V`. |
+| **tio** | `v3.9` | High-speed serial console monitor for ESP32 and Pi UART. Verified with `tio -v`. |
+| **gtkwave** | `v3.3.107` | Graphical waveform viewer in `/Applications/gtkwave.app`. |
+| **esptool** | `v5.4.0` | Official Espressif flashing & inspection tool. Verified with `esptool version`. |
+| **InteractiveHtmlBom**| `v2.11.2` | Dynamic HTML visual assembly visualizer. |
+
+---
+
+## 2. SPICE Power-Path Transient Simulation
+
+File: `hw/pcb/reticulum-hat/sim/power_path_sim.cir`
+
+```text
+Circuit: Reticulum Hat Power Path Simulation (ngspice-47)
+Doing analysis at TEMP = 27.000000 and TNOM = 27.000000
+Using SPARSE 1.3 as Direct Linear Solver
+
+=== Power Path Measurement Results ===
+v_usb_high = 5.000000e+00 V (USB-C 5V connected)
+v_sys_usb  = 4.494594e+00 V (VSYS powered from USB via BAT54C Schottky)
+v_sys_bat  = 3.700000e+00 V (VSYS powered from 3.7V LiPo battery)
+v_sys_min  = 3.700000e+00 V (Minimum voltage during hot-unplug event)
+v_drop_sw  = 0.000000e+00 V (Zero droop below battery voltage!)
+```
+**Conclusion**: The P-channel MOSFET gate drops to ground through the $100\text{ k}\Omega$ pull-down resistor instantly upon USB removal, maintaining $V_{SYS} \ge 3.70\text{ V}$ with zero reset or brownout into the AP2112K-3.3 LDO ($V_{dropout} = 250\text{ mV}$).
+
+---
+
+## 3. PCB Geometry & 50-Ohm Coplanar Waveguide
+
+- **Board Dimensions**: $65.0\text{ mm} \times 56.0\text{ mm}$, $3.5\text{ mm}$ rounded corners on Edge.Cuts layer.
+- **Mounting Holes**: 4 $\times$ $M2.5$ unplated holes ($2.75\text{ mm}$ drill) at $(103.5, 103.5)$, $(161.5, 103.5)$, $(103.5, 152.5)$, $(161.5, 152.5)\text{ mm}$.
+- **50-Ohm Coplanar Waveguide with Ground (CPWG)**:
+  - Standard FR-4 parameters: $\epsilon_r = 4.5, h = 1.6\text{ mm}, t = 35\ \mu\text{m}$.
+  - Trace width $W = 0.75\text{ mm}$ (~30 mil), Ground clearance gap $S = 0.35\text{ mm}$ (~14 mil).
+  - Characteristic impedance $Z_0 = 50.2\ \Omega$.
+  - Double row of $0.3\text{ mm}$ drill ground stitching vias along the trace connecting the top ground shield to the bottom ground plane.
+- **Component Floorplan**:
+  - **Left Area**: USB-C, JST-PH battery jack, TP4056 charger, DMG2305UX MOSFET, and AP2112K LDO.
+  - **Center Area**: Dual socket headers for ESP32-C5-DevKitC-1 or Heltec V4.
+  - **Top-Right Area**: EBYTE E22-900M22S SX1262 LoRa module and edge-mount SMA female jack.
+  - **Far-Right Area**: 10-pin ($2\times 5$) Crypto Accelerator Socket (`J_CRYPTO`) and STEMMA QT I2C port.
+  - **Bottom Area**: Raspberry Pi 40-pin female stacking header (`J_PI`).
+
+---
+
+## 4. Fabrication Package Outputs
+
+Directory: `hw/pcb/reticulum-hat/gerbers/`
+- **Production Archive**: `Gerber_Universal_Reticulum_Hat_v1.0.zip` (Contains all copper, mask, silkscreen, paste, outline, and drill files).
+- **CPL Centroid**: `centroid.csv` & `reticulum-hat-pos.csv` (Component midpoints, rotations, and layers for SMT pick-and-place).
+- **Bare Board Electrical Netlist**: `reticulum-hat.ipc` (IPC-D-356 standard).
+- **Visual Previews**: `preview.png` (rendered via gerbv) and `reticulum-hat-board.svg`.
+
+---
+
+# CI Workflow Failure Root Cause Analysis & Complete Fix Walkthrough
+
+## Overview
+
+A comprehensive analysis of recent GitHub Actions CI workflow failures on `asic-reticulum` was performed using `gh run view` and verified with local simulation tools (`icarus-verilog`, `cocotb 2.1.0`, `sbt`, and `verilator`).
+
+All root causes were identified, corrected, and verified across all test tiers.
+
+---
+
+## 1. Root Cause Analysis
+
+### Issue 1: Makefile Path Bug (`PWD` vs `CURDIR`)
+- **Symptom**:
+  ```text
+  make: *** No rule to make target '/home/runner/work/asic-reticulum/asic-reticulum/tb.v', needed by 'sim_build/sim.vvp'. Stop.
+  ```
+- **Root Cause**:
+  In `test/Makefile`, `$(PWD)/tb.v` and `$(PWD)/../src` were used. When CI executes `make -C test` from the repository root, `PWD` remains set to the repo root in the shell environment, resolving `$(PWD)/tb.v` to the non-existent `./tb.v` instead of `./test/tb.v`.
+- **Fix**:
+  Replaced `$(PWD)` with GNU Make's automatic directory variable `$(CURDIR)` and relative resolution:
+  ```makefile
+  TEST_DIR := $(CURDIR)
+  SRC_DIR ?= $(abspath $(TEST_DIR)/../src)
+  VERILOG_SOURCES += $(TEST_DIR)/tb.v
+  VERILOG_SOURCES += $(SRC_DIR)/tt_um_gmlewis_reticulum.v
+  ```
+
+### Issue 2: Opcode Mismatch in Cocotb Testbench
+- **Symptom**: `OP_IRQ_CLEAR` failed to release interrupt line `uo_out[0]` (held low).
+- **Root Cause**:
+  In `hw/spinal/reticulum/bus/QspiCommandDecoder.scala`, `OP_ABORT = 0x02` and `OP_IRQ_CLEAR = 0x03`.
+  In `test/test.py`, `OP_IRQ_CLEAR` was defined as `0x02` (which triggered abort logic rather than clearing interrupts).
+- **Fix**:
+  Updated opcodes in `test/test.py`:
+  ```python
+  OP_STATUS    = 0x01
+  OP_ABORT     = 0x02
+  OP_IRQ_CLEAR = 0x03
+  ```
+
+### Issue 3: Bus Desynchronization / Premature CS# Deassertion
+- **Symptom**: Commands did not latch correctly in simulation.
+- **Root Cause**:
+  `QspiSlave` uses a 2-stage input synchronizer plus a FIFO, requiring an 8-clock latency to pipeline the final byte of a multi-byte command. `qspi_send_command` asserted CS# high only 4 cycles after the last bit was toggled, resetting the decoder before the payload length register latched.
+- **Fix**:
+  Increased settling cycles before CS# release from 4 to 12 clock cycles.
+
+### Issue 4: Uninitialized SpinalHDL Registers (`X` Propagation in Simulation)
+- **Symptom**:
+  ```text
+  ValueError: Can't convert LogicArray to int: it contains non-0/1 values
+  ```
+- **Root Cause**:
+  In `hw/spinal/reticulum/crypto/Stamper.scala`, `val regRoundsEvaluated = Reg(UInt(64 bits))` and other status registers lacked `.init(0)`.
+  Because `statusBytes(2)` and `statusBytes(3)` return `io.stampRoundsEvaluated`, reading the status register via `OP_STATUS` output `X` values, crashing cocotb 2.x's strict integer conversion.
+- **Fix**:
+  Added `init(0)` to all configuration, counter, and snapshot registers in `Stamper.scala` and `QspiCommandDecoder.scala`, then re-generated the Verilog netlist `src/tt_um_gmlewis_reticulum.v`.
+
+### Issue 5: Cocotb 2.x Modernization & Deprecation Warnings
+- **Symptom**: Deprecation warnings on `.integer` and `units="ns"`.
+- **Fix**:
+  - Replaced all `.integer` calls with `.to_unsigned()`.
+  - Replaced `Clock(..., units="ns")` with `Clock(..., unit="ns")`.
+  - Added `COCOTB_TEST_MODULES ?= $(MODULE)` to `test/Makefile`.
+  - Added build/simulation artifacts to `.gitignore`.
+
+---
+
+## 2. Verification Results
+
+### 1. Cocotb Tiny Tapeout Simulation Suite
+```bash
+make -C test
+```
+```text
+COCOTB_TEST_MODULES=test COCOTB_TESTCASE=  COCOTB_TOPLEVEL=tb TOPLEVEL_LANG=verilog \
+    /opt/homebrew/bin/vvp -m ... sim_build/sim.vvp
+0.00ns INFO     cocotb.regression                  running test.test_status (1/3)
+2720.00ns INFO  cocotb.tb                          Status register read successfully: 00 10 00 00
+2720.00ns INFO  cocotb.regression                  test.test_status passed
+2720.00ns INFO  cocotb.regression                  running test.test_x25519 (2/3)
+117800.00ns INFO cocotb.tb                         X25519 ECDH point mult verified: c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552
+119140.00ns INFO cocotb.tb                         uo_out=00000001, x25519_irq=0
+119140.00ns INFO cocotb.regression                 test.test_x25519 passed
+119140.00ns INFO cocotb.regression                 running test.test_token_seal_and_open (3/3)
+246680.00ns INFO cocotb.tb                         Token seal & open roundtrip verified: b'Tiny Tapeout Reticulum Token Test Payload 32B!'
+248020.00ns INFO cocotb.regression                 test.test_token_seal_and_open passed
+***************************************************************************************
+** TEST                           STATUS  SIM TIME (ns)  REAL TIME (s)  RATIO (ns/s) **
+***************************************************************************************
+** test.test_status                PASS        2720.00           0.06      43640.89  **
+** test.test_x25519                PASS      116420.00           3.05      38176.27  **
+** test.test_token_seal_and_open   PASS      128880.00           1.67      77101.63  **
+***************************************************************************************
+** TESTS=3 PASS=3 FAIL=0 SKIP=0              248020.00           4.78      51835.57  **
+***************************************************************************************
+```
+
+### 2. Full SpinalSim Regression Suite
+```bash
+sbt test
+```
+```text
+[info] Total number of tests run: 62
+[info] Suites: completed 16, aborted 0
+[info] Tests: succeeded 62, failed 0, canceled 0, ignored 0, pending 0
+[info] All tests passed.
+[success] Total time: 79 s (01:19)
+```
+
+### 3. Hardware-In-The-Loop Mock Test
+```bash
+python3 tools/hil/hil_test_runner.py --sim
+```
+```text
+==================================================================
+ALL HARDWARE-IN-THE-LOOP TESTS PASSED SUCCESSFULLY (5/5 PASSED)
+==================================================================
+```
+
+### 4. Full Verilog Netlist Generation
+All 13 Verilog netlists compiled and synced cleanly with `sbt "runMain reticulum.tt.TinyTapeoutVerilog"`.
+
+

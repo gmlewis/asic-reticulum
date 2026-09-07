@@ -64,26 +64,26 @@ case class Stamper(roundsPerStage: Int = 1) extends Component {
   val activeJobId = RegInit(U(0, 8 bits))
 
   // Latched configuration registers
-  val cfgTargetCost      = Reg(UInt(8 bits))
-  val cfgMidstate        = Reg(Bits(256 bits))
-  val cfgBaseCandidate   = Reg(Bits(256 bits))
-  val cfgTotalLengthBits = Reg(UInt(64 bits))
-  val cfgMaxRounds       = Reg(UInt(64 bits))
+  val cfgTargetCost      = Reg(UInt(8 bits)) init (0)
+  val cfgMidstate        = Reg(Bits(256 bits)) init (0)
+  val cfgBaseCandidate   = Reg(Bits(256 bits)) init (0)
+  val cfgTotalLengthBits = Reg(UInt(64 bits)) init (0)
+  val cfgMaxRounds       = Reg(UInt(64 bits)) init (0)
 
   // Grinding search counters
-  val nonceCounter    = Reg(UInt(64 bits))
-  val dispatchedCount = Reg(UInt(64 bits))
-  val evaluatedCount  = Reg(UInt(64 bits))
+  val nonceCounter    = Reg(UInt(64 bits)) init (0)
+  val dispatchedCount = Reg(UInt(64 bits)) init (0)
+  val evaluatedCount  = Reg(UInt(64 bits)) init (0)
 
   // Result and status registers
   val regDone             = RegInit(False)
   val regMeetsTarget      = RegInit(False)
   val regIrq              = RegInit(False)
-  val regWinningCandidate = Reg(Bits(256 bits))
-  val regWinningDigest    = Reg(Bits(256 bits))
-  val regWinningZeros     = Reg(UInt(8 bits))
-  val regWinningNonce     = Reg(UInt(64 bits))
-  val regRoundsEvaluated  = Reg(UInt(64 bits))
+  val regWinningCandidate = Reg(Bits(256 bits)) init (0)
+  val regWinningDigest    = Reg(Bits(256 bits)) init (0)
+  val regWinningZeros     = Reg(UInt(8 bits)) init (0)
+  val regWinningNonce     = Reg(UInt(64 bits)) init (0)
+  val regRoundsEvaluated  = Reg(UInt(64 bits)) init (0)
 
   // Helper: generates a 256-bit candidate by adding a 64-bit nonce offset
   // to bytes 0..7 of base in little-endian order, matching Go stamper.go

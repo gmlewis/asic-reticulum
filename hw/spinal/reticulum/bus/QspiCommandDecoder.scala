@@ -97,12 +97,12 @@ case class QspiCommandDecoder() extends Component {
 
   val state = RegInit(DecoderState.IDLE)
 
-  val regOpcode = Reg(UInt(8 bits))
-  val regLenMsb = Reg(Bits(8 bits))
-  val regLen    = Reg(UInt(16 bits))
+  val regOpcode = Reg(UInt(8 bits)) init (0)
+  val regLenMsb = Reg(Bits(8 bits)) init (0)
+  val regLen    = Reg(UInt(16 bits)) init (0)
 
-  val bytesRemaining = Reg(UInt(16 bits))
-  val byteIndex      = Reg(UInt(16 bits))
+  val bytesRemaining = Reg(UInt(16 bits)) init (0)
+  val byteIndex      = Reg(UInt(16 bits)) init (0)
 
   // Stamper latched configuration registers
   val cfgTargetCost      = Reg(UInt(8 bits)) init (0)
@@ -161,12 +161,12 @@ case class QspiCommandDecoder() extends Component {
   statusBytes(3) := io.stampRoundsEvaluated(7 downto 0).asBits
 
   // Snapshot of winning stamp results for transmission
-  val snapStatus    = Reg(Bits(8 bits))
-  val snapZeros     = Reg(UInt(8 bits))
-  val snapNonce     = Reg(UInt(64 bits))
-  val snapRounds    = Reg(UInt(64 bits))
-  val snapDigest    = Reg(Bits(256 bits))
-  val snapCandidate = Reg(Bits(256 bits))
+  val snapStatus    = Reg(Bits(8 bits)) init (0)
+  val snapZeros     = Reg(UInt(8 bits)) init (0)
+  val snapNonce     = Reg(UInt(64 bits)) init (0)
+  val snapRounds    = Reg(UInt(64 bits)) init (0)
+  val snapDigest    = Reg(Bits(256 bits)) init (0)
+  val snapCandidate = Reg(Bits(256 bits)) init (0)
 
   def getResultByte(idx: UInt): Bits = {
     val b = Bits(8 bits)

@@ -1,6 +1,6 @@
 // Generator : SpinalHDL v1.12.3    git head : 591e64062329e5e2e2b81f4d52422948053edb97
 // Component : tt_um_gmlewis_reticulum
-// Git hash  : ec19d501f2ced3ebf456c7930aa726fd5fe90e8f
+// Git hash  : 336cb55fd859e76e7bac5afea039868334630590
 
 `timescale 1ns/1ps
 
@@ -3808,14 +3808,39 @@ module Stamper (
     if(!rst_n) begin
       state <= StamperState_IDLE;
       activeJobId <= 8'h0;
+      cfgTargetCost <= 8'h0;
+      cfgMidstate <= 256'h0;
+      cfgBaseCandidate <= 256'h0;
+      cfgTotalLengthBits <= 64'h0;
+      cfgMaxRounds <= 64'h0;
+      nonceCounter <= 64'h0;
+      dispatchedCount <= 64'h0;
+      evaluatedCount <= 64'h0;
       regDone <= 1'b0;
       regMeetsTarget <= 1'b0;
       regIrq <= 1'b0;
+      regWinningCandidate <= 256'h0;
+      regWinningDigest <= 256'h0;
+      regWinningZeros <= 8'h0;
+      regWinningNonce <= 64'h0;
+      regRoundsEvaluated <= 64'h0;
     end else begin
+      if(pipe_io_cmd_fire) begin
+        dispatchedCount <= (dispatchedCount + 64'h0000000000000001);
+        nonceCounter <= (nonceCounter + 64'h0000000000000001);
+      end
       case(state)
         StamperState_IDLE : begin
           if(io_start) begin
+            cfgTargetCost <= io_targetCost;
+            cfgMidstate <= io_midstate;
+            cfgBaseCandidate <= io_baseCandidate;
+            cfgTotalLengthBits <= io_totalLengthBits;
+            cfgMaxRounds <= io_maxRounds;
             activeJobId <= (activeJobId + 8'h01);
+            nonceCounter <= io_startNonce;
+            dispatchedCount <= 64'h0;
+            evaluatedCount <= 64'h0;
             regDone <= 1'b0;
             regMeetsTarget <= 1'b0;
             regIrq <= 1'b0;
@@ -3831,25 +3856,41 @@ module Stamper (
             regDone <= 1'b1;
             regMeetsTarget <= 1'b0;
             regIrq <= 1'b1;
+            regRoundsEvaluated <= evaluatedCount;
           end else begin
             if(io_start) begin
+              cfgTargetCost <= io_targetCost;
+              cfgMidstate <= io_midstate;
+              cfgBaseCandidate <= io_baseCandidate;
+              cfgTotalLengthBits <= io_totalLengthBits;
+              cfgMaxRounds <= io_maxRounds;
               activeJobId <= (activeJobId + 8'h01);
+              nonceCounter <= io_startNonce;
+              dispatchedCount <= 64'h0;
+              evaluatedCount <= 64'h0;
               regDone <= 1'b0;
               regMeetsTarget <= 1'b0;
               regIrq <= 1'b0;
             end else begin
               if(when_Stamper_l208) begin
+                evaluatedCount <= (evaluatedCount + 64'h0000000000000001);
                 if(lzc_io_meetsTarget) begin
                   state <= StamperState_DONE;
                   regDone <= 1'b1;
                   regMeetsTarget <= 1'b1;
                   regIrq <= 1'b1;
+                  regWinningCandidate <= _zz_regWinningCandidate_2;
+                  regWinningDigest <= pipe_io_rsp_payload_digest;
+                  regWinningZeros <= lzc_io_leadingZeros[7:0];
+                  regWinningNonce <= rspNonce;
+                  regRoundsEvaluated <= (evaluatedCount + 64'h0000000000000001);
                 end else begin
                   if(when_Stamper_l221) begin
                     state <= StamperState_DONE;
                     regDone <= 1'b1;
                     regMeetsTarget <= 1'b0;
                     regIrq <= 1'b1;
+                    regRoundsEvaluated <= cfgMaxRounds;
                   end
                 end
               end
@@ -3858,7 +3899,15 @@ module Stamper (
         end
         default : begin
           if(io_start) begin
+            cfgTargetCost <= io_targetCost;
+            cfgMidstate <= io_midstate;
+            cfgBaseCandidate <= io_baseCandidate;
+            cfgTotalLengthBits <= io_totalLengthBits;
+            cfgMaxRounds <= io_maxRounds;
             activeJobId <= (activeJobId + 8'h01);
+            nonceCounter <= io_startNonce;
+            dispatchedCount <= 64'h0;
+            evaluatedCount <= 64'h0;
             regDone <= 1'b0;
             regMeetsTarget <= 1'b0;
             regIrq <= 1'b0;
@@ -3870,70 +3919,6 @@ module Stamper (
         regIrq <= 1'b0;
       end
     end
-  end
-
-  always @(posedge clk) begin
-    if(pipe_io_cmd_fire) begin
-      dispatchedCount <= (dispatchedCount + 64'h0000000000000001);
-      nonceCounter <= (nonceCounter + 64'h0000000000000001);
-    end
-    case(state)
-      StamperState_IDLE : begin
-        if(io_start) begin
-          cfgTargetCost <= io_targetCost;
-          cfgMidstate <= io_midstate;
-          cfgBaseCandidate <= io_baseCandidate;
-          cfgTotalLengthBits <= io_totalLengthBits;
-          cfgMaxRounds <= io_maxRounds;
-          nonceCounter <= io_startNonce;
-          dispatchedCount <= 64'h0;
-          evaluatedCount <= 64'h0;
-        end
-      end
-      StamperState_GRIND : begin
-        if(io_abort) begin
-          regRoundsEvaluated <= evaluatedCount;
-        end else begin
-          if(io_start) begin
-            cfgTargetCost <= io_targetCost;
-            cfgMidstate <= io_midstate;
-            cfgBaseCandidate <= io_baseCandidate;
-            cfgTotalLengthBits <= io_totalLengthBits;
-            cfgMaxRounds <= io_maxRounds;
-            nonceCounter <= io_startNonce;
-            dispatchedCount <= 64'h0;
-            evaluatedCount <= 64'h0;
-          end else begin
-            if(when_Stamper_l208) begin
-              evaluatedCount <= (evaluatedCount + 64'h0000000000000001);
-              if(lzc_io_meetsTarget) begin
-                regWinningCandidate <= _zz_regWinningCandidate_2;
-                regWinningDigest <= pipe_io_rsp_payload_digest;
-                regWinningZeros <= lzc_io_leadingZeros[7:0];
-                regWinningNonce <= rspNonce;
-                regRoundsEvaluated <= (evaluatedCount + 64'h0000000000000001);
-              end else begin
-                if(when_Stamper_l221) begin
-                  regRoundsEvaluated <= cfgMaxRounds;
-                end
-              end
-            end
-          end
-        end
-      end
-      default : begin
-        if(io_start) begin
-          cfgTargetCost <= io_targetCost;
-          cfgMidstate <= io_midstate;
-          cfgBaseCandidate <= io_baseCandidate;
-          cfgTotalLengthBits <= io_totalLengthBits;
-          cfgMaxRounds <= io_maxRounds;
-          nonceCounter <= io_startNonce;
-          dispatchedCount <= 64'h0;
-          evaluatedCount <= 64'h0;
-        end
-      end
-    endcase
   end
 
 
@@ -5204,6 +5189,11 @@ module QspiCommandDecoder (
   always @(posedge clk or negedge rst_n) begin
     if(!rst_n) begin
       state <= DecoderState_IDLE;
+      regOpcode <= 8'h0;
+      regLenMsb <= 8'h0;
+      regLen <= 16'h0;
+      bytesRemaining <= 16'h0;
+      byteIndex <= 16'h0;
       cfgTargetCost <= 8'h0;
       cfgMidstate <= 256'h0;
       cfgBaseCandidate <= 256'h0;
@@ -5233,6 +5223,12 @@ module QspiCommandDecoder (
       snapTokenStatus <= 8'h0;
       snapTokenLen <= 16'h0;
       snapTokenOffset <= 16'h0;
+      snapStatus <= 8'h0;
+      snapZeros <= 8'h0;
+      snapNonce <= 64'h0;
+      snapRounds <= 64'h0;
+      snapDigest <= 256'h0;
+      snapCandidate <= 256'h0;
     end else begin
       regStampStart <= 1'b0;
       regStampAbort <= 1'b0;
@@ -5247,16 +5243,21 @@ module QspiCommandDecoder (
       case(state)
         DecoderState_IDLE : begin
           if(io_rx_valid) begin
+            regOpcode <= io_rx_payload;
             state <= DecoderState_LEN_MSB;
           end
         end
         DecoderState_LEN_MSB : begin
           if(io_rx_valid) begin
+            regLenMsb <= io_rx_payload;
             state <= DecoderState_LEN_LSB;
           end
         end
         DecoderState_LEN_LSB : begin
           if(io_rx_valid) begin
+            regLen <= _zz_regLen;
+            bytesRemaining <= _zz_regLen;
+            byteIndex <= 16'h0;
             if(when_QspiCommandDecoder_l279) begin
               case(regOpcode)
                 8'h01 : begin
@@ -5275,6 +5276,12 @@ module QspiCommandDecoder (
                   state <= DecoderState_IDLE;
                 end
                 8'h11 : begin
+                  snapStatus <= statusFlagByte;
+                  snapZeros <= io_stampWinningZeros;
+                  snapNonce <= io_stampWinningNonce;
+                  snapRounds <= io_stampRoundsEvaluated;
+                  snapDigest <= io_stampWinningDigest;
+                  snapCandidate <= io_stampWinningCandidate;
                   state <= DecoderState_TX_STAMP_RESULT;
                 end
                 8'h21 : begin
@@ -5598,6 +5605,8 @@ module QspiCommandDecoder (
                 end
               end
             end
+            byteIndex <= (byteIndex + 16'h0001);
+            bytesRemaining <= (bytesRemaining - 16'h0001);
             if(when_QspiCommandDecoder_l400) begin
               regStampStart <= 1'b1;
               state <= DecoderState_IDLE;
@@ -5803,6 +5812,8 @@ module QspiCommandDecoder (
                 end
               end
             end
+            byteIndex <= (byteIndex + 16'h0001);
+            bytesRemaining <= (bytesRemaining - 16'h0001);
             if(when_QspiCommandDecoder_l435) begin
               regX25519Start <= 1'b1;
               state <= DecoderState_IDLE;
@@ -5967,6 +5978,8 @@ module QspiCommandDecoder (
                 end
               end
             end
+            byteIndex <= (byteIndex + 16'h0001);
+            bytesRemaining <= (bytesRemaining - 16'h0001);
             if(when_QspiCommandDecoder_l484) begin
               cfgTokenDataLen <= ((16'h0030 <= regLen) ? _zz_cfgTokenDataLen : 16'h0);
               regTokenStart <= 1'b1;
@@ -6081,6 +6094,8 @@ module QspiCommandDecoder (
                 regTokenWrData <= io_rx_payload;
               end
             end
+            byteIndex <= (byteIndex + 16'h0001);
+            bytesRemaining <= (bytesRemaining - 16'h0001);
             if(when_QspiCommandDecoder_l526) begin
               cfgTokenDataLen <= ((16'h0020 <= regLen) ? _zz_cfgTokenDataLen_1 : 16'h0);
               regTokenStart <= 1'b1;
@@ -6090,127 +6105,45 @@ module QspiCommandDecoder (
         end
         DecoderState_RX_DISCARD : begin
           if(io_rx_valid) begin
+            bytesRemaining <= (bytesRemaining - 16'h0001);
             if(when_QspiCommandDecoder_l539) begin
               state <= DecoderState_IDLE;
             end
           end
         end
         DecoderState_TX_STATUS : begin
+          if(when_QspiCommandDecoder_l546) begin
+            if(io_tx_ready) begin
+              byteIndex <= (byteIndex + 16'h0001);
+            end
+          end
         end
         DecoderState_TX_STAMP_RESULT : begin
+          if(when_QspiCommandDecoder_l556) begin
+            if(io_tx_ready) begin
+              byteIndex <= (byteIndex + 16'h0001);
+            end
+          end
         end
         DecoderState_TX_X25519_RESULT : begin
+          if(when_QspiCommandDecoder_l566) begin
+            if(io_tx_ready) begin
+              byteIndex <= (byteIndex + 16'h0001);
+            end
+          end
         end
         default : begin
+          if(when_QspiCommandDecoder_l577) begin
+            if(io_tx_ready) begin
+              byteIndex <= (byteIndex + 16'h0001);
+            end
+          end
         end
       endcase
       if(io_cs_n) begin
         state <= DecoderState_IDLE;
       end
     end
-  end
-
-  always @(posedge clk) begin
-    case(state)
-      DecoderState_IDLE : begin
-        if(io_rx_valid) begin
-          regOpcode <= io_rx_payload;
-        end
-      end
-      DecoderState_LEN_MSB : begin
-        if(io_rx_valid) begin
-          regLenMsb <= io_rx_payload;
-        end
-      end
-      DecoderState_LEN_LSB : begin
-        if(io_rx_valid) begin
-          regLen <= _zz_regLen;
-          bytesRemaining <= _zz_regLen;
-          byteIndex <= 16'h0;
-          if(when_QspiCommandDecoder_l279) begin
-            case(regOpcode)
-              8'h01 : begin
-              end
-              8'h02 : begin
-              end
-              8'h03 : begin
-              end
-              8'h11 : begin
-                snapStatus <= statusFlagByte;
-                snapZeros <= io_stampWinningZeros;
-                snapNonce <= io_stampWinningNonce;
-                snapRounds <= io_stampRoundsEvaluated;
-                snapDigest <= io_stampWinningDigest;
-                snapCandidate <= io_stampWinningCandidate;
-              end
-              8'h21 : begin
-              end
-              8'h32 : begin
-              end
-              default : begin
-              end
-            endcase
-          end
-        end
-      end
-      DecoderState_RX_STAMP_PAYLOAD : begin
-        if(io_rx_valid) begin
-          byteIndex <= (byteIndex + 16'h0001);
-          bytesRemaining <= (bytesRemaining - 16'h0001);
-        end
-      end
-      DecoderState_RX_X25519_PAYLOAD : begin
-        if(io_rx_valid) begin
-          byteIndex <= (byteIndex + 16'h0001);
-          bytesRemaining <= (bytesRemaining - 16'h0001);
-        end
-      end
-      DecoderState_RX_TOKEN_SEAL_PAYLOAD : begin
-        if(io_rx_valid) begin
-          byteIndex <= (byteIndex + 16'h0001);
-          bytesRemaining <= (bytesRemaining - 16'h0001);
-        end
-      end
-      DecoderState_RX_TOKEN_OPEN_PAYLOAD : begin
-        if(io_rx_valid) begin
-          byteIndex <= (byteIndex + 16'h0001);
-          bytesRemaining <= (bytesRemaining - 16'h0001);
-        end
-      end
-      DecoderState_RX_DISCARD : begin
-        if(io_rx_valid) begin
-          bytesRemaining <= (bytesRemaining - 16'h0001);
-        end
-      end
-      DecoderState_TX_STATUS : begin
-        if(when_QspiCommandDecoder_l546) begin
-          if(io_tx_ready) begin
-            byteIndex <= (byteIndex + 16'h0001);
-          end
-        end
-      end
-      DecoderState_TX_STAMP_RESULT : begin
-        if(when_QspiCommandDecoder_l556) begin
-          if(io_tx_ready) begin
-            byteIndex <= (byteIndex + 16'h0001);
-          end
-        end
-      end
-      DecoderState_TX_X25519_RESULT : begin
-        if(when_QspiCommandDecoder_l566) begin
-          if(io_tx_ready) begin
-            byteIndex <= (byteIndex + 16'h0001);
-          end
-        end
-      end
-      default : begin
-        if(when_QspiCommandDecoder_l577) begin
-          if(io_tx_ready) begin
-            byteIndex <= (byteIndex + 16'h0001);
-          end
-        end
-      end
-    endcase
   end
 
 
