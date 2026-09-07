@@ -66,10 +66,13 @@ asic-reticulum/
 │       │   ├── Sha256RoundTest.scala     # FIPS vectors & randomized stress tests
 │       │   ├── Sha256PipeTest.scala      # Pipelining, midstate restore & backpressure tests
 │       │   └── StamperTest.scala         # Autonomous candidate search & IRQ verification
-│       └── bus/
-│           ├── QspiSlaveTest.scala          # Multi-byte RX/TX & CS frame reset tests
-│           ├── QspiCommandDecoderTest.scala # Opcode decoding, payload streaming & IRQ pulses
-│           └── QspiTopTest.scala            # End-to-end QSPI grinding, IRQ & readout verification
+│       ├── bus/
+│       │   ├── QspiSlaveTest.scala          # Multi-byte RX/TX & CS frame reset tests
+│       │   ├── QspiCommandDecoderTest.scala # Opcode decoding, payload streaming & IRQ pulses
+│       │   └── QspiTopTest.scala            # End-to-end QSPI grinding, IRQ & readout verification
+│       └── parity/
+│           ├── GoldenVectors.scala          # Precomputed golden vectors generated from go-reticulum
+│           └── GoReticulumParityTest.scala  # Cross-repo verification harness (Stamper, QspiTop, Sha256Pipe)
 └── gen/                               # Synthesis-ready generated Verilog output
 ```
 
@@ -151,7 +154,7 @@ cat hw/gen/QspiTop.v
 - [x] **Milestone 2**: Multi-stage pipelined SHA-256 engine with midstate restore register.
 - [x] **Milestone 3**: Autonomous IFAC Hashcash Stamp Grinder with nonce streaming and `meetsTarget` interrupt assertion.
 - [x] **Milestone 4**: 4-bit QSPI slave interface (`Stream` handshake + command decoder FSM + 7-pin `QspiTop` integration).
-- [ ] **Milestone 5**: Verification harness comparing SpinalSim / Verilator against `go-reticulum` golden test vectors.
+- [x] **Milestone 5**: Verification harness comparing SpinalSim / Verilator against `go-reticulum` golden test vectors.
 - [ ] **Milestone 6**: Montgomery ladder (X25519 / Ed25519) field arithmetic core.
 - [ ] **Milestone 7**: AES-128-CBC + HMAC-SHA256 Token engine.
 - [ ] **Milestone 8**: Top-level chip integration, OpenLane synthesis, and Tiny Tapeout GDS submission.
