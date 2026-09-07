@@ -5,7 +5,7 @@ Welcome to the **Reticulum Hardware Projects Guide**! This document provides eve
 > [!NOTE]
 > **No compiler toolchains, Python scripts, or source code cloning required!**
 > Every executable and firmware artifact referenced in this guide is pre-compiled and downloadable directly from GitHub Releases.
-> For microcontrollers (ESP32-C5 and Heltec V4 in Projects 2 and 3), you can flash firmware **directly from your web browser** with zero installation using in-browser Web Serial tools like [ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/) or the [Espressif Web Flasher](https://espressif.github.io/esptool-js/).
+> For microcontrollers (ESP32-C5 in Projects 2 and 3), you can flash firmware **directly from your web browser** with zero installation using in-browser Web Serial tools like [ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/) or the [Espressif Web Flasher](https://espressif.github.io/esptool-js/).
 
 ---
 
@@ -40,7 +40,7 @@ Welcome to the **Reticulum Hardware Projects Guide**! This document provides eve
 | Specification | Project 1: Pocket Linux Terminal | Project 2: Pocket Communicator | Project 3: Autonomous Pocket Hub |
 | :--- | :--- | :--- | :--- |
 | **Form Factor** | Form Factor A (`pocket_terminal`) | Form Factor B (`pocket_communicator`) | Form Factor C (`pocket_hub`) |
-| **Primary Host** | Raspberry Pi Zero 2W (or SBC) | ESP32-C5 (or Heltec V4) | ESP32-C5 (or Heltec V4) |
+| **Primary Host** | Raspberry Pi Zero 2W (or SBC) | ESP32-C5 RISC-V SoC | ESP32-C5 RISC-V SoC |
 | **Operating System** | Raspberry Pi OS Lite (64-bit Linux) | Bare-metal firmware / RTOS | Bare-metal firmware / RTOS |
 | **User Interface** | 2.8" Color TFT LCD + CardKB Keyboard | 2.8" Color TFT LCD + CardKB Keyboard | **Headless** (No LCD, No Keyboard) |
 | **Networking** | LoRa + Wi-Fi client + Bluetooth | LoRa + Wi-Fi 6 + Bluetooth | LoRa + Wi-Fi 6 SoftAP Repeater |
@@ -54,7 +54,7 @@ Welcome to the **Reticulum Hardware Projects Guide**! This document provides eve
 
 All three projects can be built using the **Universal Reticulum Hat & Carrier PCB** (`hw/pcb/reticulum-hat`). A single manufactured PCB accommodates:
 - **Bottom Stacking**: 40-pin header for Raspberry Pi Zero 2W (Project 1).
-- **Top Sockets**: Dual 22-pin headers for ESP32-C5 DevKit or Heltec V4 (Projects 2 and 3).
+- **Top Sockets**: Dual 22-pin headers for ESP32-C5 DevKit (Projects 2 and 3).
 - **LoRa RF**: Footprint for EBYTE E22-900M22S (+22 dBm SX1262) with edge SMA jack.
 - **Crypto Accelerator**: Standard $2\times 5$ (10-pin) QSPI socket for Tiny Tapeout 08/09/10 or Tang Primer 25K PMOD.
 - **Power System**: USB-C with Power Delivery pulldowns, TP4056 1A LiPo battery charger, dynamic power path MOSFET, and AP2112K 3.3V 600mA ultra-low-noise LDO.
@@ -218,11 +218,11 @@ dtoverlay=fbtft,spi0-0,st7789v,reset_pin=27,dc_pin=25,led_pin=18,rotate=90,speed
 
 ## Project 2: The Standalone Pocket Communicator (Form Factor B)
 
-The **Standalone Pocket Communicator** runs an ultra-low-power embedded client directly on the **ESP32-C5** RISC-V SoC (or **Heltec WiFi LoRa 32 V4**). It boots in less than 200 milliseconds, draws under 80 mA of current, and provides a clean messaging interface with physical keyboard and display without running a full Linux OS.
+The **Standalone Pocket Communicator** runs an ultra-low-power embedded client directly on the **ESP32-C5** RISC-V SoC. It boots in less than 200 milliseconds, draws under 80 mA of current, and provides a clean messaging interface with physical keyboard and display without running a full Linux OS.
 
 ```
 +-------------------------------------------------------------+
-|  [2.8" SPI TFT LCD (ST7789) or Heltec 0.96" OLED]           |
+|  [2.8" SPI TFT LCD (ST7789)]                                |
 |  +-------------------------------------------------------+  |
 |  | * RETICULUM COMMUNICATOR *        [LoRa: 915 MHz OK]  |  |
 |  | Last MSG: Glenn: "Meeting at checkpoint B in 10m"     |  |
@@ -236,16 +236,12 @@ The **Standalone Pocket Communicator** runs an ultra-low-power embedded client d
 
 ### 1. Hardware Bill of Materials (BOM)
 
-#### Option 1: Universal Reticulum Hat + ESP32-C5 (Recommended)
 - **MCU Board**: ESP32-C5-DevKitC-1 (RISC-V 240 MHz, Dual-Band Wi-Fi 6, 8MB Flash).
-- **Carrier PCB**: Universal Reticulum Hat PCB with EBYTE E22-900M22S LoRa module.
+- **Carrier PCB**: Universal Reticulum Hat PCB with EBYTE E22-900M22S LoRa module (+22 dBm SX1262).
 - **Display**: 2.8" SPI TFT LCD (ST7789).
-- **Keyboard**: M5Stack CardKB I2C.
+- **Keyboard**: M5Stack CardKB I2C (v1.1).
 - **Battery**: 1S 3.7V LiPo with JST-PH 2.0mm connector.
-
-#### Option 2: Heltec WiFi LoRa 32 V4 (All-in-One Off-the-Shelf)
-- **Board**: Heltec WiFi LoRa 32 V4 ([Heltec Store](https://heltec.org/project/wifi-lora-32-v4/)). Comes pre-assembled with ESP32-S3, high-power +28 dBm SX1262, 0.96" OLED, and antenna.
-- **Keyboard**: M5Stack CardKB connected to the Heltec's I2C pins (`GPIO 41/SDA`, `GPIO 42/SCL`).
+- **Antenna**: 868 MHz / 915 MHz SMA Antenna.
 
 ### 2. Files to Download from GitHub
 
@@ -271,13 +267,13 @@ If using the Universal Hat in Mode B:
 
 ### 4. Flashing & First Boot
 
-You have two easy ways to flash the firmware onto the ESP32-C5 or Heltec V4:
+You have two easy ways to flash the firmware onto the ESP32-C5:
 
 #### Method A: In-Browser Web Flasher (Zero-Install — Recommended)
 
 You do **not** need Python, `pip`, or command-line tools installed. You can flash the board directly from your web browser using the Web Serial API (supported in Google Chrome, Microsoft Edge, Brave, and Opera):
 
-1. Connect the ESP32-C5 or Heltec V4 to your computer using a USB-C data cable.
+1. Connect the ESP32-C5 to your computer using a USB-C data cable.
 2. Open either of these web flashers in a supported browser:
    - **[ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/)** *(simple drag-and-drop web flasher)*
    - **[Espressif Official Web Flasher (esptool-js)](https://espressif.github.io/esptool-js/)** *(official Espressif Web Serial tool)*
@@ -334,8 +330,8 @@ The **Autonomous Pocket Hub & Repeater** is a dedicated, self-contained mesh rel
 
 | Item | Description / Recommendation | Approx. Cost |
 | :--- | :--- | :--- |
-| **MCU Board** | ESP32-C5-DevKitC-1 or Heltec WiFi LoRa 32 V4 | ~$15–20 |
-| **RF Transceiver** | EBYTE E22-900M22S SX1262 (or Heltec onboard LoRa) | Included / ~$7 |
+| **MCU Board** | ESP32-C5-DevKitC-1 (240 MHz RISC-V, Wi-Fi 6) | ~$15–20 |
+| **RF Transceiver** | EBYTE E22-900M22S SX1262 (+22 dBm) | ~$7 |
 | **Antenna** | High-Gain 3 dBi–5.8 dBi Tuned SMA Fiberglass Antenna | ~$15 |
 | **Power System** | 18650 Li-Ion Cell with holder OR 5V USB-C Solar Power Bank | ~$12 |
 | **Enclosure** | IP67 Weatherproof Junction Box (with SMA bulkhead) | ~$8 |
@@ -362,7 +358,7 @@ curl -LO https://github.com/gmlewis/go-reticulum/releases/latest/download/rrcd.t
 
 #### Method A: In-Browser Web Flasher (Zero-Install — Recommended)
 
-1. Connect the ESP32-C5 (or Heltec V4) to your computer via USB-C.
+1. Connect the ESP32-C5 to your computer via USB-C.
 2. Open **[ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/)** or **[Espressif Web Flasher](https://espressif.github.io/esptool-js/)** in Google Chrome, Microsoft Edge, Brave, or Opera.
 3. Click **Connect** and select your ESP32 serial port.
 4. Set Flash Offset to **`0x0`** and select the downloaded file `gorrcd-pocket_hub-esp32c5-firmware.bin`.
@@ -402,12 +398,12 @@ Any smartphone, laptop, or tablet can connect to the hub without an internet con
 
 > [!WARNING]
 > **RF POWER AMPLIFIER PROTECTION**:
-> Never supply power to the E22-900M22S or Heltec V4 without a 50-ohm antenna securely connected. Transmitting without an antenna generates an infinite Voltage Standing Wave Ratio (VSWR), reflecting RF power back into the final stage transistors and permanently destroying the SX1262.
+> Never supply power to the EBYTE E22-900M22S without a 50-ohm antenna securely connected. Transmitting without an antenna generates an infinite Voltage Standing Wave Ratio (VSWR), reflecting RF power back into the final stage transistors and permanently destroying the SX1262.
 
 - **Regional Frequencies**:
   - **North America / Australia**: $902.0\text{ MHz} - 928.0\text{ MHz}$ (Default: $914.9\text{ MHz}$).
   - **Europe**: $863.0\text{ MHz} - 870.0\text{ MHz}$ (Default: $868.1\text{ MHz}$).
-  - Set `txpower = 22` (+22 dBm / 160 mW) for E22, or up to `txpower = 28` (+28 dBm / ~630 mW) on the Heltec V4.
+  - Set `txpower = 22` (+22 dBm / 160 mW) for E22.
 - **Antenna Placement**: For best line-of-sight propagation, keep the antenna vertical and elevated at least 1 meter away from large metal surfaces or human bodies.
 
 ---

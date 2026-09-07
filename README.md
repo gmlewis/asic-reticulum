@@ -17,7 +17,7 @@ For an exhaustive technical deep-dive into all design decisions, mathematical fo
 > ### Looking to build or flash the hardware devices?
 > Jump straight to the [**Reticulum Hardware Projects Guide**](https://github.com/gmlewis/asic-reticulum/tree/master/Hardware-Projects-Guide.md) for complete purchasing BOMs, step-by-step assembly, pre-built binary downloads, and zero-install in-browser web flashing for all three standalone off-grid hardware projects:
 > - **Project 1: Pocket Linux Terminal** (Raspberry Pi Zero 2W + SPI LCD + CardKB + LoRa + full TUI)
-> - **Project 2: Standalone Pocket Communicator** (ESP32-C5 / Heltec V4 + LCD + CardKB + LoRa)
+> - **Project 2: Standalone Pocket Communicator** (ESP32-C5 RISC-V SoC + LCD + CardKB + LoRa)
 > - **Project 3: Autonomous Pocket Hub & Repeater** (ESP32-C5 + LoRa + Wi-Fi 6 SoftAP)
 
 ---
