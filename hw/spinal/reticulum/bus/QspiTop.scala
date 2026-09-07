@@ -1,6 +1,6 @@
 package reticulum.bus
 
-import reticulum.crypto.{Stamper, X25519Ladder}
+import reticulum.crypto.{Stamper, X25519Ladder, TokenEngine}
 import spinal.core._
 import spinal.lib._
 
@@ -31,6 +31,7 @@ case class QspiTopIo() extends Bundle {
  *  2. Command Decoder FSM (QspiCommandDecoder).
  *  3. Autonomous IFAC Hashcash Stamp Grinder (Stamper).
  *  4. Constant-time X25519 Montgomery Ladder Engine (X25519Ladder).
+ *  5. AES-128-CBC + HMAC-SHA256 Token Encryption & Decryption Engine (TokenEngine).
  *
  * Provides a 7-pin physical interface to host microcontrollers (e.g. ESP32-C5 GDMA):
  *  - High-speed 4-bit streaming at 20-40 MB/s wire speed.
@@ -43,6 +44,7 @@ case class QspiTop(roundsPerStage: Int = 1) extends Component {
   val decoder = QspiCommandDecoder()
   val stamper = Stamper(roundsPerStage = roundsPerStage)
   val x25519  = X25519Ladder()
+  val token   = TokenEngine()
 
   // -------------------------------------------------------------------------
   // Physical Pad Connections
@@ -55,8 +57,8 @@ case class QspiTop(roundsPerStage: Int = 1) extends Component {
 
   decoder.io.cs_n := io.cs_n
 
-  // Dedicated active-low interrupt to host (asserts if Stamper OR X25519 asserts IRQ)
-  io.irq_n := !(stamper.io.irq || x25519.io.irq)
+  // Dedicated active-low interrupt to host (asserts if Stamper OR X25519 OR Token asserts IRQ)
+  io.irq_n := !(stamper.io.irq || x25519.io.irq || token.io.irq)
 
   // -------------------------------------------------------------------------
   // QSPI Slave <-> Command Decoder Interconnect
@@ -101,10 +103,34 @@ case class QspiTop(roundsPerStage: Int = 1) extends Component {
   decoder.io.x25519Done   := x25519.io.done
   decoder.io.x25519Irq    := x25519.io.irq
   decoder.io.x25519Result := x25519.io.result
+
+  // -------------------------------------------------------------------------
+  // Command Decoder <-> TokenEngine Interconnect
+  // -------------------------------------------------------------------------
+  token.io.start        := decoder.io.tokenStart
+  token.io.mode         := decoder.io.tokenMode
+  token.io.abort        := decoder.io.tokenAbort
+  token.io.irqClear     := decoder.io.tokenIrqClear
+  token.io.signKey      := decoder.io.tokenSignKey
+  token.io.encKey       := decoder.io.tokenEncKey
+  token.io.iv           := decoder.io.tokenIv
+  token.io.dataLen      := decoder.io.tokenDataLen
+  token.io.hostWrEn     := decoder.io.tokenHostWrEn
+  token.io.hostWrAddr   := decoder.io.tokenHostWrAddr
+  token.io.hostWrData   := decoder.io.tokenHostWrData
+  token.io.hostRdAddr   := decoder.io.tokenHostRdAddr
+  decoder.io.tokenHostRdData := token.io.hostRdData
+
+  decoder.io.tokenBusy         := token.io.busy
+  decoder.io.tokenDone         := token.io.done
+  decoder.io.tokenIrq          := token.io.irq
+  decoder.io.tokenStatus       := token.io.status
+  decoder.io.tokenResultLen    := token.io.resultLen
+  decoder.io.tokenResultOffset := token.io.resultOffset
 }
 
 /**
- * Generates synthesis-ready Verilog for the top-level QspiTop ASIC module.
+ * Generates synthesis-ready Verilog for the top-level Reticulum ASIC QspiTop.
  * Run with: sbt "runMain reticulum.bus.QspiTopVerilog"
  */
 object QspiTopVerilog extends App {
@@ -115,5 +141,6 @@ object QspiTopVerilog extends App {
       resetActiveLevel = HIGH
     )
   )
-  config.generateVerilog(QspiTop(roundsPerStage = 1))
+  config.generateVerilog(QspiTop(roundsPerStage = 1)).printPruned()
+  println("Successfully generated Verilog in hw/gen/QspiTop.v")
 }

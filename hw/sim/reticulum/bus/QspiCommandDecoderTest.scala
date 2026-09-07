@@ -42,6 +42,14 @@ class QspiCommandDecoderTest extends AnyFunSuite {
     dut.io.x25519Done #= false
     dut.io.x25519Irq #= false
     dut.io.x25519Result #= 0
+
+    dut.io.tokenBusy #= false
+    dut.io.tokenDone #= false
+    dut.io.tokenIrq #= false
+    dut.io.tokenStatus #= 0
+    dut.io.tokenResultLen #= 0
+    dut.io.tokenResultOffset #= 0
+    dut.io.tokenHostRdData #= 0
   }
 
   test("QspiCommandDecoder: OP_STATUS read") {

@@ -11,6 +11,9 @@ object QspiOpcode {
   val OP_STAMP_READ  = 0x11
   val OP_X25519_MULT = 0x20
   val OP_X25519_READ = 0x21
+  val OP_TOKEN_SEAL  = 0x30
+  val OP_TOKEN_OPEN  = 0x31
+  val OP_TOKEN_READ  = 0x32
 }
 
 /**
@@ -56,10 +59,32 @@ case class QspiCommandDecoderIo() extends Bundle {
   val x25519Done   = in Bool()
   val x25519Irq    = in Bool()
   val x25519Result = in Bits(256 bits)
+
+  // Control & Status lines to/from TokenEngine
+  val tokenStart        = out Bool()
+  val tokenMode         = out Bool()
+  val tokenAbort        = out Bool()
+  val tokenIrqClear     = out Bool()
+  val tokenSignKey      = out Bits(128 bits)
+  val tokenEncKey       = out Bits(128 bits)
+  val tokenIv           = out Bits(128 bits)
+  val tokenDataLen      = out UInt(16 bits)
+  val tokenHostWrEn     = out Bool()
+  val tokenHostWrAddr   = out UInt(10 bits)
+  val tokenHostWrData   = out Bits(8 bits)
+  val tokenHostRdAddr   = out UInt(10 bits)
+  val tokenHostRdData   = in Bits(8 bits)
+
+  val tokenBusy         = in Bool()
+  val tokenDone         = in Bool()
+  val tokenIrq          = in Bool()
+  val tokenStatus       = in Bits(8 bits)
+  val tokenResultLen    = in UInt(16 bits)
+  val tokenResultOffset = in UInt(16 bits)
 }
 
 object DecoderState extends SpinalEnum {
-  val IDLE, LEN_MSB, LEN_LSB, RX_STAMP_PAYLOAD, RX_X25519_PAYLOAD, RX_DISCARD, TX_STATUS, TX_STAMP_RESULT, TX_X25519_RESULT = newElement()
+  val IDLE, LEN_MSB, LEN_LSB, RX_STAMP_PAYLOAD, RX_X25519_PAYLOAD, RX_TOKEN_SEAL_PAYLOAD, RX_TOKEN_OPEN_PAYLOAD, RX_DISCARD, TX_STATUS, TX_STAMP_RESULT, TX_X25519_RESULT, TX_TOKEN_RESULT = newElement()
 }
 
 /**
@@ -92,17 +117,36 @@ case class QspiCommandDecoder() extends Component {
   val regStampIrqClear = RegInit(False)
 
   // X25519 latched configuration registers
-  val cfgScalar        = Reg(Bits(256 bits)) init (0)
-  val cfgUCoord        = Reg(Bits(256 bits)) init (0)
-  val regX25519Start   = RegInit(False)
-  val regX25519Abort   = RegInit(False)
+  val cfgScalar         = Reg(Bits(256 bits)) init (0)
+  val cfgUCoord         = Reg(Bits(256 bits)) init (0)
+  val regX25519Start    = RegInit(False)
+  val regX25519Abort    = RegInit(False)
   val regX25519IrqClear = RegInit(False)
-  val snapX25519Result = Reg(Bits(256 bits)) init (0)
+  val snapX25519Result  = Reg(Bits(256 bits)) init (0)
+
+  // Token latched configuration registers
+  val cfgTokenSignKey  = Reg(Bits(128 bits)) init (0)
+  val cfgTokenEncKey   = Reg(Bits(128 bits)) init (0)
+  val cfgTokenIv       = Reg(Bits(128 bits)) init (0)
+  val cfgTokenDataLen  = Reg(UInt(16 bits)) init (0)
+  val cfgTokenMode     = Reg(Bool()) init (True)
+
+  val regTokenStart    = RegInit(False)
+  val regTokenAbort    = RegInit(False)
+  val regTokenIrqClear = RegInit(False)
+
+  val regTokenWrEn   = RegInit(False)
+  val regTokenWrAddr = Reg(UInt(10 bits)) init (0)
+  val regTokenWrData = Reg(Bits(8 bits)) init (0)
+
+  val snapTokenStatus = Reg(Bits(8 bits)) init (0)
+  val snapTokenLen    = Reg(UInt(16 bits)) init (0)
+  val snapTokenOffset = Reg(UInt(16 bits)) init (0)
 
   // Status buffer for reading
   val statusBytes = Vec(Bits(8 bits), 4)
   val statusFlagByte = Cat(
-    B(0, 1 bit),
+    io.tokenIrq,
     io.x25519Irq,
     io.x25519Busy,
     io.x25519Done,
@@ -112,17 +156,17 @@ case class QspiCommandDecoder() extends Component {
     io.stampDone
   )
   statusBytes(0) := statusFlagByte
-  statusBytes(1) := B"8'h10" // Reticulum ASIC Architecture v1.0
+  statusBytes(1) := Cat(B"6'b000100", io.tokenBusy, io.tokenDone) // Arch v1.0 (0x10) + token flags
   statusBytes(2) := io.stampRoundsEvaluated(15 downto 8).asBits
   statusBytes(3) := io.stampRoundsEvaluated(7 downto 0).asBits
 
   // Snapshot of winning stamp results for transmission
-  val snapStatus       = Reg(Bits(8 bits))
-  val snapZeros        = Reg(UInt(8 bits))
-  val snapNonce        = Reg(UInt(64 bits))
-  val snapRounds       = Reg(UInt(64 bits))
-  val snapDigest       = Reg(Bits(256 bits))
-  val snapCandidate    = Reg(Bits(256 bits))
+  val snapStatus    = Reg(Bits(8 bits))
+  val snapZeros     = Reg(UInt(8 bits))
+  val snapNonce     = Reg(UInt(64 bits))
+  val snapRounds    = Reg(UInt(64 bits))
+  val snapDigest    = Reg(Bits(256 bits))
+  val snapCandidate = Reg(Bits(256 bits))
 
   def getResultByte(idx: UInt): Bits = {
     val b = Bits(8 bits)
@@ -178,20 +222,34 @@ case class QspiCommandDecoder() extends Component {
   }
 
   // Stream defaults
-  io.rx.ready := False
-  io.tx.valid := False
+  io.rx.ready   := False
+  io.tx.valid   := False
   io.tx.payload := B(0, 8 bits)
 
-  val isTxState = (state === DecoderState.TX_STATUS) || (state === DecoderState.TX_STAMP_RESULT) || (state === DecoderState.TX_X25519_RESULT)
+  val isTxState = (state === DecoderState.TX_STATUS) ||
+                  (state === DecoderState.TX_STAMP_RESULT) ||
+                  (state === DecoderState.TX_X25519_RESULT) ||
+                  (state === DecoderState.TX_TOKEN_RESULT)
   io.txEnable := isTxState
 
   // Pulses reset automatically
-  regStampStart     := False
-  regStampAbort     := False
-  regStampIrqClear  := False
-  regX25519Start    := False
-  regX25519Abort    := False
+  regStampStart    := False
+  regStampAbort    := False
+  regStampIrqClear := False
+  regX25519Start   := False
+  regX25519Abort   := False
   regX25519IrqClear := False
+  regTokenStart    := False
+  regTokenAbort    := False
+  regTokenIrqClear := False
+  regTokenWrEn     := False
+
+  // Token read address calculation during TX_TOKEN_RESULT
+  when(state === DecoderState.TX_TOKEN_RESULT && byteIndex >= 3) {
+    io.tokenHostRdAddr := (snapTokenOffset + (byteIndex - 3)).resized
+  } otherwise {
+    io.tokenHostRdAddr := 0
+  }
 
   switch(state) {
     is(DecoderState.IDLE) {
@@ -224,17 +282,18 @@ case class QspiCommandDecoder() extends Component {
               state := DecoderState.TX_STATUS
             }
             is(QspiOpcode.OP_ABORT) {
-              regStampAbort  := True
+              regStampAbort := True
               regX25519Abort := True
-              state          := DecoderState.IDLE
+              regTokenAbort := True
+              state         := DecoderState.IDLE
             }
             is(QspiOpcode.OP_IRQ_CLEAR) {
-              regStampIrqClear  := True
+              regStampIrqClear := True
               regX25519IrqClear := True
-              state             := DecoderState.IDLE
+              regTokenIrqClear := True
+              state            := DecoderState.IDLE
             }
             is(QspiOpcode.OP_STAMP_READ) {
-              // Latch snapshot of current stamp results
               snapStatus    := statusFlagByte
               snapZeros     := io.stampWinningZeros
               snapNonce     := io.stampWinningNonce
@@ -244,9 +303,14 @@ case class QspiCommandDecoder() extends Component {
               state         := DecoderState.TX_STAMP_RESULT
             }
             is(QspiOpcode.OP_X25519_READ) {
-              // Latch snapshot of current X25519 result
               snapX25519Result := io.x25519Result
               state            := DecoderState.TX_X25519_RESULT
+            }
+            is(QspiOpcode.OP_TOKEN_READ) {
+              snapTokenStatus := io.tokenStatus
+              snapTokenLen    := io.tokenResultLen
+              snapTokenOffset := io.tokenResultOffset
+              state           := DecoderState.TX_TOKEN_RESULT
             }
             default {
               state := DecoderState.IDLE
@@ -259,6 +323,14 @@ case class QspiCommandDecoder() extends Component {
             }
             is(QspiOpcode.OP_X25519_MULT) {
               state := DecoderState.RX_X25519_PAYLOAD
+            }
+            is(QspiOpcode.OP_TOKEN_SEAL) {
+              cfgTokenMode := True
+              state        := DecoderState.RX_TOKEN_SEAL_PAYLOAD
+            }
+            is(QspiOpcode.OP_TOKEN_OPEN) {
+              cfgTokenMode := False
+              state        := DecoderState.RX_TOKEN_OPEN_PAYLOAD
             }
             default {
               state := DecoderState.RX_DISCARD
@@ -367,6 +439,99 @@ case class QspiCommandDecoder() extends Component {
       }
     }
 
+    // RX Token Seal payload: [16B signKey] [16B encKey] [16B IV] [dataLen Plaintext]
+    is(DecoderState.RX_TOKEN_SEAL_PAYLOAD) {
+      io.rx.ready := True
+      when(io.rx.valid) {
+        val b = io.rx.payload
+        when(byteIndex <= 15) {
+          val offset = byteIndex.resize(4 bits)
+          for (i <- 0 until 16) {
+            when(offset === i) {
+              val msb = 127 - i * 8
+              val lsb = msb - 7
+              cfgTokenSignKey(msb downto lsb) := b
+            }
+          }
+        } elsewhen(byteIndex >= 16 && byteIndex <= 31) {
+          val offset = (byteIndex - 16).resize(4 bits)
+          for (i <- 0 until 16) {
+            when(offset === i) {
+              val msb = 127 - i * 8
+              val lsb = msb - 7
+              cfgTokenEncKey(msb downto lsb) := b
+            }
+          }
+        } elsewhen(byteIndex >= 32 && byteIndex <= 47) {
+          val offset = (byteIndex - 32).resize(4 bits)
+          for (i <- 0 until 16) {
+            when(offset === i) {
+              val msb = 127 - i * 8
+              val lsb = msb - 7
+              cfgTokenIv(msb downto lsb) := b
+            }
+          }
+        } otherwise {
+          // Write plaintext byte into Token buffer memory starting at offset 16
+          regTokenWrEn   := True
+          regTokenWrAddr := (U(16, 10 bits) + (byteIndex - 48).resized).resized
+          regTokenWrData := b
+        }
+
+        byteIndex      := byteIndex + 1
+        bytesRemaining := bytesRemaining - 1
+
+        when(bytesRemaining === 1) {
+          val pLen = (regLen >= 48) ? (regLen - 48) | U(0, 16 bits)
+          cfgTokenDataLen := pLen
+          regTokenStart   := True
+          state           := DecoderState.IDLE
+        }
+      }
+    }
+
+    // RX Token Open payload: [16B signKey] [16B encKey] [tokenLen TokenBytes]
+    is(DecoderState.RX_TOKEN_OPEN_PAYLOAD) {
+      io.rx.ready := True
+      when(io.rx.valid) {
+        val b = io.rx.payload
+        when(byteIndex <= 15) {
+          val offset = byteIndex.resize(4 bits)
+          for (i <- 0 until 16) {
+            when(offset === i) {
+              val msb = 127 - i * 8
+              val lsb = msb - 7
+              cfgTokenSignKey(msb downto lsb) := b
+            }
+          }
+        } elsewhen(byteIndex >= 16 && byteIndex <= 31) {
+          val offset = (byteIndex - 16).resize(4 bits)
+          for (i <- 0 until 16) {
+            when(offset === i) {
+              val msb = 127 - i * 8
+              val lsb = msb - 7
+              cfgTokenEncKey(msb downto lsb) := b
+            }
+          }
+        } otherwise {
+          // Write token byte into Token buffer memory starting at offset 0
+          regTokenWrEn   := True
+          regTokenWrAddr := (byteIndex - 32).resized
+          regTokenWrData := b
+        }
+
+        byteIndex      := byteIndex + 1
+        bytesRemaining := bytesRemaining - 1
+
+        when(bytesRemaining === 1) {
+          val tLen = (regLen >= 32) ? (regLen - 32) | U(0, 16 bits)
+          cfgTokenDataLen := tLen
+          regTokenStart   := True
+          state           := DecoderState.IDLE
+        }
+      }
+    }
+
     is(DecoderState.RX_DISCARD) {
       io.rx.ready := True
       when(io.rx.valid) {
@@ -406,6 +571,24 @@ case class QspiCommandDecoder() extends Component {
         }
       }
     }
+
+    is(DecoderState.TX_TOKEN_RESULT) {
+      val totalTxBytes = U(3, 16 bits) + snapTokenLen
+      when(byteIndex < totalTxBytes) {
+        io.tx.valid := True
+        switch(byteIndex) {
+          is(0) { io.tx.payload := snapTokenStatus }
+          is(1) { io.tx.payload := snapTokenLen(15 downto 8).asBits }
+          is(2) { io.tx.payload := snapTokenLen(7 downto 0).asBits }
+          default {
+            io.tx.payload := io.tokenHostRdData
+          }
+        }
+        when(io.tx.ready) {
+          byteIndex := byteIndex + 1
+        }
+      }
+    }
   }
 
   // Reset to IDLE whenever Chip Select deasserts
@@ -430,4 +613,17 @@ case class QspiCommandDecoder() extends Component {
   io.x25519IrqClear := regX25519IrqClear
   io.x25519Scalar   := cfgScalar
   io.x25519UCoord   := cfgUCoord
+
+  // Connect outputs to TokenEngine
+  io.tokenStart        := regTokenStart
+  io.tokenMode         := cfgTokenMode
+  io.tokenAbort        := regTokenAbort
+  io.tokenIrqClear     := regTokenIrqClear
+  io.tokenSignKey      := cfgTokenSignKey
+  io.tokenEncKey       := cfgTokenEncKey
+  io.tokenIv           := cfgTokenIv
+  io.tokenDataLen      := cfgTokenDataLen
+  io.tokenHostWrEn     := regTokenWrEn
+  io.tokenHostWrAddr   := regTokenWrAddr
+  io.tokenHostWrData   := regTokenWrData
 }

@@ -291,4 +291,120 @@ class QspiTopTest extends AnyFunSuite {
       assert(dut.io.irq_n.toBoolean, "irq_n should return high (inactive) after OP_IRQ_CLEAR")
     }
   }
+
+  test("QspiTop: End-to-end Token Seal and Open, hardware IRQ, and result readout over QSPI") {
+    SimConfig.compile(QspiTop(roundsPerStage = 1)).doSim { dut =>
+      dut.clockDomain.forkStimulus(period = 10)
+      dut.io.sclk #= false
+      dut.io.cs_n #= true
+      dut.io.data_in #= 0
+      dut.clockDomain.waitSampling(5)
+
+      assert(dut.io.irq_n.toBoolean, "irq_n should start high (inactive)")
+
+      val signKeyHex = "0102030405060708090a0b0c0d0e0f10"
+      val encKeyHex  = "1112131415161718191a1b1c1d1e1f20"
+      val ivHex      = "2122232425262728292a2b2c2d2e2f30"
+      val ptString   = "Reticulum QSPI Token Test 12345!"
+      val ptBytes    = ptString.getBytes("UTF-8").map(_.toInt & 0xff).toSeq
+      assert(ptBytes.length == 32)
+
+      val signKeyBytes = hexToBytes(signKeyHex)
+      val encKeyBytes  = hexToBytes(encKeyHex)
+      val ivBytes      = hexToBytes(ivHex)
+
+      // 1. Host dispatches OP_TOKEN_SEAL
+      val sealPayload = signKeyBytes ++ encKeyBytes ++ ivBytes ++ ptBytes
+      assert(sealPayload.length == 80)
+      qspiSendCommand(dut, QspiOpcode.OP_TOKEN_SEAL, sealPayload)
+
+      // 2. Host waits for hardware interrupt (irq_n going low)
+      var waitCycles = 0
+      val maxWait    = 3000
+      while (dut.io.irq_n.toBoolean && waitCycles < maxWait) {
+        dut.clockDomain.waitSampling(10)
+        waitCycles += 10
+      }
+      assert(!dut.io.irq_n.toBoolean, s"irq_n was not asserted low within $maxWait cycles for Seal")
+
+      // 3. Host reads back sealed token via OP_TOKEN_READ
+      dut.io.cs_n #= false
+      dut.clockDomain.waitSampling(4)
+
+      qspiWriteByte(dut, QspiOpcode.OP_TOKEN_READ)
+      qspiWriteByte(dut, 0x00)
+      qspiWriteByte(dut, 0x00)
+      dut.clockDomain.waitSampling(8)
+
+      val sealStatus = qspiReadByte(dut)
+      val sealLenMsb = qspiReadByte(dut)
+      val sealLenLsb = qspiReadByte(dut)
+      val sealedLen  = (sealLenMsb << 8) | sealLenLsb
+
+      assert(sealStatus == 0, s"Expected OK status (0), got $sealStatus")
+      assert(sealedLen == 96, s"Expected sealed length 96, got $sealedLen")
+
+      val sealedToken = collection.mutable.ArrayBuffer[Int]()
+      for (_ <- 0 until sealedLen) {
+        sealedToken += qspiReadByte(dut)
+      }
+
+      dut.clockDomain.waitSampling(4)
+      dut.io.cs_n #= true
+      dut.clockDomain.waitSampling(5)
+
+      // 4. Host clears interrupt via OP_IRQ_CLEAR
+      qspiSendCommand(dut, QspiOpcode.OP_IRQ_CLEAR)
+      dut.clockDomain.waitSampling(5)
+      assert(dut.io.irq_n.toBoolean, "irq_n should return high after OP_IRQ_CLEAR")
+
+      // 5. Host dispatches OP_TOKEN_OPEN with the sealed token
+      val openPayload = signKeyBytes ++ encKeyBytes ++ sealedToken.toSeq
+      assert(openPayload.length == 32 + 96)
+      qspiSendCommand(dut, QspiOpcode.OP_TOKEN_OPEN, openPayload)
+
+      // 6. Host waits for hardware interrupt
+      waitCycles = 0
+      while (dut.io.irq_n.toBoolean && waitCycles < maxWait) {
+        dut.clockDomain.waitSampling(10)
+        waitCycles += 10
+      }
+      assert(!dut.io.irq_n.toBoolean, s"irq_n was not asserted low within $maxWait cycles for Open")
+
+      // 7. Host reads back recovered plaintext via OP_TOKEN_READ
+      dut.io.cs_n #= false
+      dut.clockDomain.waitSampling(4)
+
+      qspiWriteByte(dut, QspiOpcode.OP_TOKEN_READ)
+      qspiWriteByte(dut, 0x00)
+      qspiWriteByte(dut, 0x00)
+      dut.clockDomain.waitSampling(8)
+
+      val openStatus = qspiReadByte(dut)
+      val openLenMsb = qspiReadByte(dut)
+      val openLenLsb = qspiReadByte(dut)
+      val openedLen  = (openLenMsb << 8) | openLenLsb
+
+      assert(openStatus == 0, s"Expected OK status (0), got $openStatus")
+      assert(openedLen == 32, s"Expected opened length 32, got $openedLen")
+
+      val recoveredBytes = collection.mutable.ArrayBuffer[Int]()
+      for (_ <- 0 until openedLen) {
+        recoveredBytes += qspiReadByte(dut)
+      }
+
+      dut.clockDomain.waitSampling(4)
+      dut.io.cs_n #= true
+      dut.clockDomain.waitSampling(5)
+
+      val recoveredString = new String(recoveredBytes.map(_.toByte).toArray, "UTF-8")
+      assert(recoveredString == ptString, s"Plaintext mismatch: expected '$ptString', got '$recoveredString'")
+
+      // 8. Clear IRQ
+      qspiSendCommand(dut, QspiOpcode.OP_IRQ_CLEAR)
+      dut.clockDomain.waitSampling(5)
+      assert(dut.io.irq_n.toBoolean, "irq_n should return high after OP_IRQ_CLEAR")
+    }
+  }
 }
+

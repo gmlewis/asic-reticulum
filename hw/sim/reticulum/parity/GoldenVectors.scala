@@ -34,6 +34,15 @@ case class GoldenX25519Case(
   expectedSharedHex: String
 )
 
+case class GoldenTokenCase(
+  name: String,
+  keyHex: String,
+  ivHex: String,
+  plaintextHex: String,
+  plaintextUtf8: String,
+  expectedTokenHex: String
+)
+
 object GoldenVectors {
   val cases: Seq[GoldenCase] = Seq(
     GoldenCase(
@@ -262,6 +271,41 @@ object GoldenVectors {
       scalarHex = "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742",
       uCoordHex = "438a6800f489f1a7d0394b507c7510a976ce5439f481ac60bdab3429b59e564e",
       expectedSharedHex = "aaf91d2b8b839649e5d6ae431eeece2d5c68dae6de1bde60dce5af764500471e"
+    ),
+  )
+
+  val tokenCases: Seq[GoldenTokenCase] = Seq(
+    GoldenTokenCase(
+      name = "Empty Payload",
+      keyHex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      ivHex = "202122232425262728292a2b2c2d2e2f",
+      plaintextHex = "",
+      plaintextUtf8 = "",
+      expectedTokenHex = "202122232425262728292a2b2c2d2e2fe82546cf4538181b3f0a24390107fd00d24f8903b0ac4069cc5c0ab7828624c46414bddde5d9f6741b80be50d1754359"
+    ),
+    GoldenTokenCase(
+      name = "Single Block 16-byte Message",
+      keyHex = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      ivHex = "2122232425262728292a2b2c2d2e2f30",
+      plaintextHex = "524e5320506f636b6574204875622031",
+      plaintextUtf8 = "RNS Pocket Hub 1",
+      expectedTokenHex = "2122232425262728292a2b2c2d2e2f30e95f43dc4a22bd726d920f69763ee517d3a62e5b37618d62fb0dad22ceddff154f36e69bedbbeefe628c5cf9b7dddf7e3e27e3acd8cf08ad666fdd8be30b3ac8"
+    ),
+    GoldenTokenCase(
+      name = "32-byte Standard Payload",
+      keyHex = "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      ivHex = "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      plaintextHex = "5265746963756c756d20546f6b656e20456e67696e6520546573742031323334",
+      plaintextUtf8 = "Reticulum Token Engine Test 1234",
+      expectedTokenHex = "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf0077b41ab35e03e7b85319535216f6d31bdfbba5c263a541ee7008fe89b014c41d4f148a2330fa2d0debf2bd7f7736192e028164b31ebbea604a102d1f80280eccd830871b43a843e5952776bc044116"
+    ),
+    GoldenTokenCase(
+      name = "Multi-block RRC Chat Message (80B)",
+      keyHex = "feedfacefeedfacefeedfacefeedfacecafebabecafebabecafebabecafebabe",
+      ivHex = "1234567890abcdef1234567890abcdef",
+      plaintextHex = "524e5320436f6d6d756e69747920487562202367656e6572616c3a2048692065766572796f6e652c2077656c636f6d6520746f205265746963756c756d206d657368206e6574776f726b696e6721",
+      plaintextUtf8 = "RNS Community Hub #general: Hi everyone, welcome to Reticulum mesh networking!",
+      expectedTokenHex = "1234567890abcdef1234567890abcdef3bf9d2cd4a3ec16430ae3fdfd9de81d35fa2e9a8b085b531d7de6d53ff76b58d36c53610c803f9060ca9a8d2142c3902d65d772fb80914c43a5ba0eeb1e676f08eee2e95d3c12a105a934e3de4e83ad37f1ebe4a77bc67a9bf4f4bbfc30f3ba2b8c831a7750197250ded51351a65fdb6"
     ),
   )
 }

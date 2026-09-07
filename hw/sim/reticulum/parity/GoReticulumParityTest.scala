@@ -3,7 +3,7 @@ package reticulum.parity
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.prop.TableDrivenPropertyChecks._
 import reticulum.bus.{QspiOpcode, QspiTop}
-import reticulum.crypto.{Sha256Pipe, Stamper, X25519Ladder}
+import reticulum.crypto.{Sha256Pipe, Stamper, X25519Ladder, TokenEngine}
 import spinal.core._
 import spinal.core.sim._
 
@@ -437,4 +437,238 @@ class GoReticulumParityTest extends AnyFunSuite {
       }
     }
   }
+
+  test("TokenEngine: table-driven Seal and Open parity against go-reticulum golden vectors") {
+    val tokenTable = Table(
+      "case",
+      GoldenVectors.tokenCases: _*
+    )
+
+    SimConfig.compile(TokenEngine()).doSim { dut =>
+      dut.clockDomain.forkStimulus(period = 10)
+      dut.io.start #= false
+      dut.io.mode #= true
+      dut.io.abort #= false
+      dut.io.irqClear #= false
+      dut.io.signKey #= 0
+      dut.io.encKey #= 0
+      dut.io.iv #= 0
+      dut.io.dataLen #= 0
+      dut.io.hostWrEn #= false
+      dut.io.hostWrAddr #= 0
+      dut.io.hostWrData #= 0
+      dut.io.hostRdAddr #= 0
+      dut.clockDomain.waitSampling(5)
+
+      forAll(tokenTable) { c =>
+        val keyBytes   = hexToBytes(c.keyHex)
+        val signKeyHex = c.keyHex.substring(0, 32)
+        val encKeyHex  = c.keyHex.substring(32, 64)
+        val ivHex      = c.ivHex
+        val ptBytes    = hexToBytes(c.plaintextHex)
+
+        // 1. Write Plaintext to mem[16 .. 16 + len - 1]
+        if (ptBytes.nonEmpty) {
+          dut.io.hostWrEn #= true
+          for (i <- ptBytes.indices) {
+            dut.io.hostWrAddr #= 16 + i
+            dut.io.hostWrData #= ptBytes(i)
+            dut.clockDomain.waitSampling()
+          }
+          dut.io.hostWrEn #= false
+          dut.clockDomain.waitSampling()
+        }
+
+        // 2. Start Seal
+        dut.io.signKey #= BigInt(signKeyHex, 16)
+        dut.io.encKey  #= BigInt(encKeyHex, 16)
+        dut.io.iv      #= BigInt(ivHex, 16)
+        dut.io.dataLen #= ptBytes.length
+        dut.io.mode    #= true
+        dut.io.start   #= true
+        dut.clockDomain.waitSampling()
+        dut.io.start   #= false
+        dut.clockDomain.waitSamplingWhere(!dut.io.done.toBoolean)
+        dut.clockDomain.waitSamplingWhere(dut.io.done.toBoolean)
+
+        assert(dut.io.status.toBigInt == 0, s"${c.name}: Seal status should be OK (0)")
+        val sealedLen = dut.io.resultLen.toInt
+
+        // 3. Read sealed token from mem[0 .. sealedLen - 1]
+        val sealedToken = collection.mutable.ArrayBuffer[Int]()
+        for (i <- 0 until sealedLen) {
+          dut.io.hostRdAddr #= i
+          dut.clockDomain.waitSampling()
+          sealedToken += dut.io.hostRdData.toInt
+        }
+
+        val sealedTokenHex = bytesToHex(sealedToken.toSeq)
+        assert(
+          sealedTokenHex == c.expectedTokenHex,
+          s"${c.name}: Sealed token mismatch:\n got:  $sealedTokenHex\n want: ${c.expectedTokenHex}"
+        )
+
+        // Clear IRQ
+        dut.io.irqClear #= true
+        dut.clockDomain.waitSampling()
+        dut.io.irqClear #= false
+        dut.clockDomain.waitSampling()
+
+        // 4. Open the sealed token
+        dut.io.dataLen #= sealedLen
+        dut.io.mode    #= false
+        dut.io.start   #= true
+        dut.clockDomain.waitSampling()
+        dut.io.start   #= false
+        dut.clockDomain.waitSamplingWhere(!dut.io.done.toBoolean)
+        dut.clockDomain.waitSamplingWhere(dut.io.done.toBoolean)
+
+        assert(dut.io.status.toBigInt == 0, s"${c.name}: Open status should be OK (0)")
+        val openedLen = dut.io.resultLen.toInt
+        assert(openedLen == ptBytes.length, s"${c.name}: Opened length mismatch: exp ${ptBytes.length}, got $openedLen")
+
+        // 5. Read decrypted plaintext from mem[16 .. 16 + openedLen - 1]
+        val recoveredBytes = collection.mutable.ArrayBuffer[Int]()
+        for (i <- 0 until openedLen) {
+          dut.io.hostRdAddr #= 16 + i
+          dut.clockDomain.waitSampling()
+          recoveredBytes += dut.io.hostRdData.toInt
+        }
+
+        val recoveredHex = bytesToHex(recoveredBytes.toSeq)
+        assert(
+          recoveredHex == c.plaintextHex,
+          s"${c.name}: Plaintext mismatch:\n got:  $recoveredHex\n want: ${c.plaintextHex}"
+        )
+
+        // Clear IRQ
+        dut.io.irqClear #= true
+        dut.clockDomain.waitSampling()
+        dut.io.irqClear #= false
+        dut.clockDomain.waitSampling()
+      }
+    }
+  }
+
+  test("QspiTop: table-driven Token Seal and Open parity over QSPI") {
+    val tokenTable = Table(
+      "case",
+      GoldenVectors.tokenCases: _*
+    )
+
+    SimConfig.compile(QspiTop(roundsPerStage = 1)).doSim { dut =>
+      dut.clockDomain.forkStimulus(period = 10)
+      dut.io.sclk #= false
+      dut.io.cs_n #= true
+      dut.io.data_in #= 0
+      dut.clockDomain.waitSampling(5)
+
+      forAll(tokenTable) { c =>
+        val keyBytes     = hexToBytes(c.keyHex)
+        val signKeyBytes = keyBytes.take(16)
+        val encKeyBytes  = keyBytes.drop(16).take(16)
+        val ivBytes      = hexToBytes(c.ivHex)
+        val ptBytes      = hexToBytes(c.plaintextHex)
+
+        // 1. Dispatch OP_TOKEN_SEAL
+        val sealPayload = signKeyBytes ++ encKeyBytes ++ ivBytes ++ ptBytes
+        qspiSendCommand(dut, QspiOpcode.OP_TOKEN_SEAL, sealPayload)
+
+        // 2. Await hardware IRQ (active low)
+        var waitCycles = 0
+        val maxWait    = 3000
+        while (dut.io.irq_n.toBoolean && waitCycles < maxWait) {
+          dut.clockDomain.waitSampling(10)
+          waitCycles += 10
+        }
+        assert(!dut.io.irq_n.toBoolean, s"${c.name}: IRQ was not asserted low for Seal")
+
+        // 3. Read back sealed token via OP_TOKEN_READ
+        dut.io.cs_n #= false
+        dut.clockDomain.waitSampling(4)
+
+        qspiWriteByte(dut, QspiOpcode.OP_TOKEN_READ)
+        qspiWriteByte(dut, 0x00)
+        qspiWriteByte(dut, 0x00)
+        dut.clockDomain.waitSampling(8)
+
+        val sealStatus = qspiReadByte(dut)
+        val sealLenMsb = qspiReadByte(dut)
+        val sealLenLsb = qspiReadByte(dut)
+        val sealedLen  = (sealLenMsb << 8) | sealLenLsb
+
+        assert(sealStatus == 0, s"${c.name}: Expected OK status (0), got $sealStatus")
+
+        val sealedToken = collection.mutable.ArrayBuffer[Int]()
+        for (_ <- 0 until sealedLen) {
+          sealedToken += qspiReadByte(dut)
+        }
+
+        dut.clockDomain.waitSampling(4)
+        dut.io.cs_n #= true
+        dut.clockDomain.waitSampling(5)
+
+        val sealedHex = bytesToHex(sealedToken.toSeq)
+        assert(
+          sealedHex == c.expectedTokenHex,
+          s"${c.name}: QSPI Sealed token mismatch:\n got:  $sealedHex\n want: ${c.expectedTokenHex}"
+        )
+
+        // 4. Clear interrupt
+        qspiSendCommand(dut, QspiOpcode.OP_IRQ_CLEAR)
+        dut.clockDomain.waitSampling(5)
+        assert(dut.io.irq_n.toBoolean, s"${c.name}: irq_n should return high after OP_IRQ_CLEAR")
+
+        // 5. Dispatch OP_TOKEN_OPEN
+        val openPayload = signKeyBytes ++ encKeyBytes ++ sealedToken.toSeq
+        qspiSendCommand(dut, QspiOpcode.OP_TOKEN_OPEN, openPayload)
+
+        // 6. Await hardware IRQ
+        waitCycles = 0
+        while (dut.io.irq_n.toBoolean && waitCycles < maxWait) {
+          dut.clockDomain.waitSampling(10)
+          waitCycles += 10
+        }
+        assert(!dut.io.irq_n.toBoolean, s"${c.name}: IRQ was not asserted low for Open")
+
+        // 7. Read back plaintext via OP_TOKEN_READ
+        dut.io.cs_n #= false
+        dut.clockDomain.waitSampling(4)
+
+        qspiWriteByte(dut, QspiOpcode.OP_TOKEN_READ)
+        qspiWriteByte(dut, 0x00)
+        qspiWriteByte(dut, 0x00)
+        dut.clockDomain.waitSampling(8)
+
+        val openStatus = qspiReadByte(dut)
+        val openLenMsb = qspiReadByte(dut)
+        val openLenLsb = qspiReadByte(dut)
+        val openedLen  = (openLenMsb << 8) | openLenLsb
+
+        assert(openStatus == 0, s"${c.name}: Expected OK status (0), got $openStatus")
+        assert(openedLen == ptBytes.length, s"${c.name}: Expected opened len ${ptBytes.length}, got $openedLen")
+
+        val recoveredBytes = collection.mutable.ArrayBuffer[Int]()
+        for (_ <- 0 until openedLen) {
+          recoveredBytes += qspiReadByte(dut)
+        }
+
+        dut.clockDomain.waitSampling(4)
+        dut.io.cs_n #= true
+        dut.clockDomain.waitSampling(5)
+
+        val recoveredHex = bytesToHex(recoveredBytes.toSeq)
+        assert(
+          recoveredHex == c.plaintextHex,
+          s"${c.name}: QSPI Plaintext mismatch:\n got:  $recoveredHex\n want: ${c.plaintextHex}"
+        )
+
+        // 8. Clear interrupt
+        qspiSendCommand(dut, QspiOpcode.OP_IRQ_CLEAR)
+        dut.clockDomain.waitSampling(5)
+        assert(dut.io.irq_n.toBoolean, s"${c.name}: irq_n should return high after OP_IRQ_CLEAR")
+      }
+    }
+  }
 }
+

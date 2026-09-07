@@ -60,8 +60,12 @@ asic-reticulum/
 │   │       │   ├── Sha256Pipe.scala       # Pipelined SHA-256 engine with midstate restore
 │   │       │   ├── Stamper.scala          # Autonomous IFAC Hashcash stamp grinder
 │   │       │   ├── Field25519.scala       # GF(2^255-19) modular arithmetic primitives
-│   │       │   └── X25519Ladder.scala     # Constant-time Montgomery ladder X25519 engine
-│   │       └── bus/
+│   │       │   ├── X25519Ladder.scala     # Constant-time Montgomery ladder X25519 engine
+│   │       │   ├── AesConstants.scala     # AES S-Box, InvS-Box, and Rcon constants
+│   │       │   ├── AesCore.scala          # 10-cycle iterative AES-128 encrypt/decrypt core
+│   │       │   ├── HmacSha256.scala       # RFC 2104 / FIPS 198-1 HMAC-SHA256 streaming core
+│   │       │   └── TokenEngine.scala      # Fernet-style AES-128-CBC + HMAC-SHA256 packet engine
+│       └── bus/
 │           ├── QspiSlave.scala          # 4-bit QSPI slave transceiver with Stream RX/TX
 │           ├── QspiCommandDecoder.scala    # Command decoder FSM & accelerator control lines
 │           └── QspiTop.scala               # Top-level 7-pin physical interface & interconnect
@@ -73,14 +77,17 @@ asic-reticulum/
 │       │   ├── Sha256PipeTest.scala      # Pipelining, midstate restore & backpressure tests
 │       │   ├── StamperTest.scala         # Autonomous candidate search & IRQ verification
 │       │   ├── Field25519Test.scala      # GF(2^255-19) add/sub/mul/sqr/reduction tests
-│       │   └── X25519LadderTest.scala    # RFC 7748 Vectors 1 & 2 + abort verification
+│       │   ├── X25519LadderTest.scala    # RFC 7748 Vectors 1 & 2 + abort verification
+│       │   ├── AesCoreTest.scala         # FIPS 197 AES-128 encrypt & decrypt verification
+│       │   ├── HmacSha256Test.scala      # RFC 4231 HMAC test cases & multi-block verification
+│       │   └── TokenEngineTest.scala     # In-place Seal, Open, and PKCS#7 padding validation
 │       ├── bus/
 │       │   ├── QspiSlaveTest.scala          # Multi-byte RX/TX & CS frame reset tests
 │       │   ├── QspiCommandDecoderTest.scala # Opcode decoding, payload streaming & IRQ pulses
 │       │   └── QspiTopTest.scala            # End-to-end QSPI grinding, IRQ & readout verification
 │       └── parity/
 │           ├── GoldenVectors.scala          # Precomputed golden vectors generated from go-reticulum
-│           └── GoReticulumParityTest.scala  # Cross-repo verification harness (Stamper, QspiTop, Sha256Pipe)
+│           └── GoReticulumParityTest.scala  # Cross-repo verification harness (Stamper, QspiTop, Sha256Pipe, X25519, Token)
 └── gen/                               # Synthesis-ready generated Verilog output
 ```
 
@@ -146,6 +153,18 @@ To generate standard, synthesis-ready Verilog into `hw/gen/`:
   ```bash
   sbt "runMain reticulum.crypto.X25519LadderVerilog"
   ```
+- **Generate AES-128 Iterative Core (`AesCore.v`)**:
+  ```bash
+  sbt "runMain reticulum.crypto.AesCoreVerilog"
+  ```
+- **Generate Streaming HMAC-SHA256 Engine (`HmacSha256.v`)**:
+  ```bash
+  sbt "runMain reticulum.crypto.HmacSha256Verilog"
+  ```
+- **Generate Token Seal/Open Engine (`TokenEngine.v`)**:
+  ```bash
+  sbt "runMain reticulum.crypto.TokenEngineVerilog"
+  ```
 - **Generate Top-Level QSPI Crypto Engine (`QspiTop.v`)**:
   ```bash
   sbt "runMain reticulum.bus.QspiTopVerilog"
@@ -159,6 +178,9 @@ cat hw/gen/Sha256Pipe.v
 cat hw/gen/Stamper.v
 cat hw/gen/FieldMultiplier.v
 cat hw/gen/X25519Ladder.v
+cat hw/gen/AesCore.v
+cat hw/gen/HmacSha256.v
+cat hw/gen/TokenEngine.v
 cat hw/gen/QspiSlave.v
 cat hw/gen/QspiTop.v
 ```
@@ -174,5 +196,5 @@ cat hw/gen/QspiTop.v
 - [x] **Milestone 4**: 4-bit QSPI slave interface (`Stream` handshake + command decoder FSM + 7-pin `QspiTop` integration).
 - [x] **Milestone 5**: Verification harness comparing SpinalSim / Verilator against `go-reticulum` golden test vectors.
 - [x] **Milestone 6**: Montgomery ladder (X25519 / Ed25519) field arithmetic core.
-- [ ] **Milestone 7**: AES-128-CBC + HMAC-SHA256 Token engine.
+- [x] **Milestone 7**: AES-128-CBC + HMAC-SHA256 Token engine.
 - [ ] **Milestone 8**: Top-level chip integration, OpenLane synthesis, and Tiny Tapeout GDS submission.
