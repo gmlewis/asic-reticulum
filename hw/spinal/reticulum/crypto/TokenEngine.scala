@@ -13,7 +13,7 @@ object TokenStatus {
 }
 
 /**
- * Hardware Acceleration Engine for Reticulum crypto.Token (AES-128-CBC + HMAC-SHA256).
+ * Hardware Acceleration Core for Reticulum crypto.Token (AES-128-CBC + HMAC-SHA256).
  *
  * Implements:
  *  - Token Seal: PKCS#7 padding -> AES-128-CBC Encrypt -> HMAC-SHA256 Signing
@@ -29,10 +29,9 @@ object TokenStatus {
  *  - Output: Plaintext at mem[16 .. 16 + resultLen - 1].
  *  - Total output length: resultLen, offset: 16.
  *
- * @param numEngines Number of parallel execution units (default 1).
  * @param bufferSize Internal packet buffer size in bytes (default 1024).
  */
-case class TokenEngine(numEngines: Int = 1, bufferSize: Int = 1024) extends Component {
+case class TokenCore(bufferSize: Int = 1024) extends Component {
   val io = new Bundle {
     // Control lines
     val start        = in Bool()
@@ -523,6 +522,175 @@ case class TokenEngine(numEngines: Int = 1, bufferSize: Int = 1024) extends Comp
   when(io.abort) {
     regDone := True
     regIrq  := True
+  }
+}
+
+/**
+ * Parameterized Hardware Accelerator for Reticulum crypto.Token.
+ *
+ * When numEngines == 1:
+ *  - Directly wires a single TokenCore with zero multiplexing or cycle overhead,
+ *    ensuring 100% netlist parity for Tiny Tapeout / compact silicon runs.
+ *
+ * When numEngines > 1:
+ *  - Instantiates an agile pool of N TokenCore execution units with:
+ *    1. Dynamic input allocation: routes incoming write streams to the next idle engine.
+ *    2. Concurrent execution: allows all N engines to compute in parallel.
+ *    3. In-order completion FIFO: queues completed jobs so OP_TOKEN_READ transparently
+ *       reads back results in FIFO submission order.
+ *    4. Collective status & busy reporting: asserts io.busy only when all N engines are saturated.
+ *
+ * @param numEngines Number of parallel execution units (default 1).
+ * @param bufferSize Internal packet buffer size in bytes (default 1024).
+ */
+case class TokenEngine(numEngines: Int = 1, bufferSize: Int = 1024) extends Component {
+  val io = new Bundle {
+    // Control lines
+    val start        = in Bool()
+    val mode         = in Bool() // True = Seal (encrypt+sign), False = Open (verify+decrypt)
+    val abort        = in Bool()
+    val irqClear     = in Bool()
+    val busy         = out Bool()
+    val done         = out Bool()
+    val irq          = out Bool()
+    val status       = out Bits(8 bits) // 0x00 = OK, 0x01 = ERR_HMAC, 0x02 = ERR_PAD, 0x03 = ERR_LEN
+
+    // Keys & Parameters
+    val signKey      = in Bits(128 bits) // 16-byte HMAC signing key (tokenKey[0..15])
+    val encKey       = in Bits(128 bits) // 16-byte AES encryption key (tokenKey[16..31])
+    val iv           = in Bits(128 bits) // 16-byte initialization vector
+    val dataLen      = in UInt(16 bits)  // Input data length in bytes
+    val resultLen    = out UInt(16 bits) // Resulting data length in bytes
+    val resultOffset = out UInt(16 bits) // Offset in buffer where result begins (0 for Seal, 16 for Open)
+
+    // Host buffer memory interface (for QSPI read/write)
+    val hostWrEn     = in Bool()
+    val hostWrAddr   = in UInt(10 bits)
+    val hostWrData   = in Bits(8 bits)
+    val hostRdAddr   = in UInt(10 bits)
+    val hostRdData   = out Bits(8 bits)
+  }
+
+  if (numEngines <= 1) {
+    val core = TokenCore(bufferSize)
+    core.io.start        := io.start
+    core.io.mode         := io.mode
+    core.io.abort        := io.abort
+    core.io.irqClear     := io.irqClear
+    io.busy              := core.io.busy
+    io.done              := core.io.done
+    io.irq               := core.io.irq
+    io.status            := core.io.status
+    core.io.signKey      := io.signKey
+    core.io.encKey       := io.encKey
+    core.io.iv           := io.iv
+    core.io.dataLen      := io.dataLen
+    io.resultLen         := core.io.resultLen
+    io.resultOffset      := core.io.resultOffset
+    core.io.hostWrEn     := io.hostWrEn
+    core.io.hostWrAddr   := io.hostWrAddr
+    core.io.hostWrData   := io.hostWrData
+    core.io.hostRdAddr   := io.hostRdAddr
+    io.hostRdData        := core.io.hostRdData
+  } else {
+    val cores = Array.tabulate(numEngines)(_ => TokenCore(bufferSize))
+
+    // Lifecycle tracking
+    val engineActive = Vec(RegInit(False), numEngines)
+    val freeMask     = Bits(numEngines bits)
+    for (i <- 0 until numEngines) {
+      freeMask(i) := !engineActive(i)
+    }
+    val allEnginesBusy = (freeMask === 0)
+    val nextFreeIdx    = OHToUInt(OHMasking.first(freeMask))
+
+    // Latch target write engine across multi-byte write streams
+    val wrEngReg     = Reg(UInt(log2Up(numEngines) bits)) init(0)
+    val wrActive     = RegInit(False)
+    val currentWrIdx = Mux(wrActive, wrEngReg, nextFreeIdx)
+
+    when(io.hostWrEn && !wrActive && !allEnginesBusy) {
+      wrEngReg := nextFreeIdx
+      wrActive := True
+    }
+    when(io.start || io.abort) {
+      wrActive := False
+    }
+
+    // In-order completion FIFO
+    val qMem   = Vec(Reg(UInt(log2Up(numEngines) bits)) init(0), numEngines)
+    val qWrPtr = Reg(UInt(log2Up(numEngines) bits)) init(0)
+    val qRdPtr = Reg(UInt(log2Up(numEngines) bits)) init(0)
+    val qCount = Reg(UInt(log2Up(numEngines + 1) bits)) init(0)
+
+    val qEmpty  = (qCount === 0)
+    val qFull   = (qCount === numEngines)
+    val headIdx = qMem(qRdPtr)
+
+    val push = io.start && !allEnginesBusy && !qFull
+    val pop  = io.irqClear && !qEmpty
+
+    when(push) {
+      qMem(qWrPtr) := currentWrIdx
+      engineActive(currentWrIdx) := True
+      qWrPtr := Mux(qWrPtr === numEngines - 1, U(0, log2Up(numEngines) bits), qWrPtr + 1)
+    }
+
+    when(pop) {
+      engineActive(headIdx) := False
+      qRdPtr := Mux(qRdPtr === numEngines - 1, U(0, log2Up(numEngines) bits), qRdPtr + 1)
+    }
+
+    when(push && !pop) {
+      qCount := qCount + 1
+    } elsewhen(!push && pop) {
+      qCount := qCount - 1
+    }
+
+    when(io.abort) {
+      qCount   := 0
+      qWrPtr   := 0
+      qRdPtr   := 0
+      wrActive := False
+      for (i <- 0 until numEngines) {
+        engineActive(i) := False
+      }
+    }
+
+    // Connect core inputs
+    for (i <- 0 until numEngines) {
+      cores(i).io.hostWrEn   := io.hostWrEn && (currentWrIdx === i) && !allEnginesBusy
+      cores(i).io.hostWrAddr := io.hostWrAddr
+      cores(i).io.hostWrData := io.hostWrData
+
+      cores(i).io.signKey    := io.signKey
+      cores(i).io.encKey     := io.encKey
+      cores(i).io.iv         := io.iv
+      cores(i).io.dataLen    := io.dataLen
+      cores(i).io.mode       := io.mode
+
+      cores(i).io.start      := io.start && (currentWrIdx === i) && !allEnginesBusy
+      cores(i).io.abort      := io.abort
+      cores(i).io.irqClear   := pop && (headIdx === i)
+      cores(i).io.hostRdAddr := io.hostRdAddr
+    }
+
+    // Multiplex outputs from head of completion FIFO
+    val doneVec   = Vec(cores.map(_.io.done))
+    val statusVec = Vec(cores.map(_.io.status))
+    val lenVec    = Vec(cores.map(_.io.resultLen))
+    val offsetVec = Vec(cores.map(_.io.resultOffset))
+    val rdDataVec = Vec(cores.map(_.io.hostRdData))
+
+    val headDone = !qEmpty && doneVec(headIdx)
+
+    io.busy         := allEnginesBusy || qFull
+    io.done         := headDone
+    io.irq          := headDone
+    io.status       := Mux(!qEmpty, statusVec(headIdx), TokenStatus.OK)
+    io.resultLen    := Mux(!qEmpty, lenVec(headIdx), U(0, 16 bits))
+    io.resultOffset := Mux(!qEmpty, offsetVec(headIdx), U(0, 16 bits))
+    io.hostRdData   := Mux(!qEmpty, rdDataVec(headIdx), B(0, 8 bits))
   }
 }
 
