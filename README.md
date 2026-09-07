@@ -1,5 +1,9 @@
 # asic-reticulum
 
+![gonomadnet mascot
+The Go gopher was designed by Renee French.
+The design is licensed under the Creative Commons 4.0 Attribution license.](assets/gonomadnet-mascot.png)
+
 Hardware accelerator ASIC for the [Reticulum Network Stack](https://reticulum.network) authored in **SpinalHDL** (Scala DSL).
 
 This project implements the silicon offload targets specified in [`ASIC-Plans.md`](https://github.com/gmlewis/go-reticulum/blob/master/ASIC-Plans.md),
