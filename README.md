@@ -67,10 +67,25 @@ asic-reticulum/
 │   │       │   ├── AesCore.scala          # 10-cycle iterative AES-128 encrypt/decrypt core
 │   │       │   ├── HmacSha256.scala       # RFC 2104 / FIPS 198-1 HMAC-SHA256 streaming core
 │   │       │   └── TokenEngine.scala      # Fernet-style AES-128-CBC + HMAC-SHA256 packet engine
-│       └── bus/
-│           ├── QspiSlave.scala          # 4-bit QSPI slave transceiver with Stream RX/TX
-│           ├── QspiCommandDecoder.scala    # Command decoder FSM & accelerator control lines
-│           └── QspiTop.scala               # Top-level 7-pin physical interface & interconnect
+│   │       ├── bus/
+│   │       │   ├── QspiSlave.scala          # 4-bit QSPI slave transceiver with Stream RX/TX
+│   │       │   ├── QspiCommandDecoder.scala    # Command decoder FSM & accelerator control lines
+│   │       │   └── QspiTop.scala               # Top-level 7-pin physical interface & interconnect
+│   │       ├── fpga/
+│   │       │   └── FpgaTop.scala            # Multi-engine FPGA top-level wrapper
+│   │       └── tt/
+│   │           └── TinyTapeoutTop.scala     # Tiny Tapeout top module (tt_um_gmlewis_reticulum)
+├── openlane/                          # OpenLane physical design & synthesis configs
+│   ├── config.json                    # OpenLane 2 configuration (Sky130 50 MHz)
+│   ├── config.tcl                     # OpenLane 1 configuration
+│   └── pin_order.cfg                  # Macro perimeter pin placement
+├── test/                              # Cocotb verification testbench for Tiny Tapeout CI
+│   ├── tb.v                           # Verilog simulation top wrapper
+│   ├── test.py                        # Cocotb test cases (Status, X25519, Token Seal/Open)
+│   └── Makefile                       # Icarus Verilog + Cocotb makefile
+├── src/                               # Standalone synthesis Verilog for Tiny Tapeout submission
+│   └── tt_um_gmlewis_reticulum.v
+├── info.yaml                          # Tiny Tapeout project manifest & pinout specification
 ├── sim/                               # Table-driven simulation test suites (ScalaTest + SpinalSim)
 │   └── reticulum/
 │       ├── crypto/
@@ -87,6 +102,8 @@ asic-reticulum/
 │       │   ├── QspiSlaveTest.scala          # Multi-byte RX/TX & CS frame reset tests
 │       │   ├── QspiCommandDecoderTest.scala # Opcode decoding, payload streaming & IRQ pulses
 │       │   └── QspiTopTest.scala            # End-to-end QSPI grinding, IRQ & readout verification
+│       ├── tt/
+│       │   └── TinyTapeoutTopTest.scala     # TT pin mapping, bus turnaround & crypto tests
 │       └── parity/
 │           ├── GoldenVectors.scala          # Precomputed golden vectors generated from go-reticulum
 │           └── GoReticulumParityTest.scala  # Cross-repo verification harness (Stamper, QspiTop, Sha256Pipe, X25519, Token)
@@ -175,6 +192,10 @@ To generate standard, synthesis-ready Verilog into `hw/gen/`:
   ```bash
   sbt "runMain reticulum.fpga.FpgaTopVerilog"
   ```
+- **Generate Tiny Tapeout Top-Level (`tt_um_gmlewis_reticulum.v`)**:
+  ```bash
+  sbt "runMain reticulum.tt.TinyTapeoutVerilog"
+  ```
 
 Inspect the generated outputs:
 ```bash
@@ -190,6 +211,8 @@ cat hw/gen/TokenEngine.v
 cat hw/gen/QspiSlave.v
 cat hw/gen/QspiTop.v
 cat hw/gen/FpgaTop.v
+cat hw/gen/tt_um_gmlewis_reticulum.v
+cat src/tt_um_gmlewis_reticulum.v
 ```
 
 ---
@@ -217,7 +240,59 @@ Milestone 8 provides complete synthesis wrappers, physical pin constraints, and 
 
 ---
 
-## 6. Implementation Roadmap
+## 6. Tiny Tapeout & OpenLane ASIC Synthesis Flow
+
+Milestone 9 packages the complete cryptographic accelerator for tapeout on SkyWater 130nm (`sky130_fd_sc_hd`) through Tiny Tapeout.
+
+### Tiny Tapeout Pinout Mapping
+
+| Pin Name | Type | Signal | Function Description |
+| :--- | :--- | :--- | :--- |
+| `clk` | Input | `clk` | System clock (typically 20–50 MHz) |
+| `rst_n` | Input | `rst_n` | Active-low asynchronous reset |
+| `ena` | Input | `ena` | Tile enable from Tiny Tapeout multiplexer |
+| `ui_in[0]` | Input | `qspi_sclk` | Quad-SPI bus clock (Mode 0) |
+| `ui_in[1]` | Input | `qspi_cs_n` | Quad-SPI active-low chip select |
+| `ui_in[7:2]` | Input | — | Reserved inputs (tied low internally) |
+| `uio[0]` | Bidirectional | `qspi_io0` | 4-bit Quad-SPI Data Bit 0 (MOSI in 1-bit mode) |
+| `uio[1]` | Bidirectional | `qspi_io1` | 4-bit Quad-SPI Data Bit 1 (MISO in 1-bit mode) |
+| `uio[2]` | Bidirectional | `qspi_io2` | 4-bit Quad-SPI Data Bit 2 (WP# in standard SPI) |
+| `uio[3]` | Bidirectional | `qspi_io3` | 4-bit Quad-SPI Data Bit 3 (HOLD# in standard SPI) |
+| `uio[7:4]` | Bidirectional | — | Reserved bidirectional lines (high-Z) |
+| `uo_out[0]` | Output | `qspi_irq_n` | Active-low completion interrupt to host MCU |
+| `uo_out[1]` | Output | `busy` | Active-high status (engine actively computing) |
+| `uo_out[2]` | Output | `heartbeat` | ~1.5 Hz diagnostic blinker (50 MHz / 2^25) |
+| `uo_out[7:3]` | Output | — | Reserved status outputs (driven low) |
+
+### Automated OpenLane Synthesis
+
+Physical layout and GDS generation targeting `sky130A` standard cells:
+
+```bash
+# Automated local OpenLane run (via Docker):
+./scripts/run-openlane.sh
+```
+
+Configuration files:
+- [`openlane/config.json`](openlane/config.json): OpenLane 2 configuration with 50 MHz clock constraint (`CLOCK_PERIOD = 20.0 ns`).
+- [`openlane/config.tcl`](openlane/config.tcl): Backward-compatible OpenLane 1 configuration.
+- [`openlane/pin_order.cfg`](openlane/pin_order.cfg): Standard perimeter pin placements conforming to Tiny Tapeout macro slots.
+- [`info.yaml`](info.yaml): Tiny Tapeout metadata manifest (tile allocation: `4x2`, 50 MHz clock).
+
+### Cocotb Hardware Verification
+
+Tiny Tapeout automated CI verifies the top-level netlist using Cocotb and Icarus Verilog:
+
+```bash
+# Run cocotb testbench:
+make -C test
+```
+
+Tests validate status register readout, 256-bit X25519 point multiplication, and Token seal/open authenticated encryption roundtrips through the top-level pins.
+
+---
+
+## 7. Implementation Roadmap
 
 - [x] **Milestone 0**: Repository setup, build system (`build.sbt`), and SpinalHDL toolchain validation.
 - [x] **Milestone 1**: Core primitives — `LeadZeroCounter` and `Sha256Round`.
@@ -228,4 +303,4 @@ Milestone 8 provides complete synthesis wrappers, physical pin constraints, and 
 - [x] **Milestone 6**: Montgomery ladder (X25519 / Ed25519) field arithmetic core.
 - [x] **Milestone 7**: AES-128-CBC + HMAC-SHA256 Token engine (with parameterized multi-engine pool support).
 - [x] **Milestone 8**: FPGA emulation, synthesis, and hardware-in-the-loop (HIL) testbed with ESP32-C5.
-- [ ] **Milestone 9**: Top-level chip integration, OpenLane synthesis, and Tiny Tapeout GDS submission.
+- [x] **Milestone 9**: Top-level chip integration, OpenLane synthesis, and Tiny Tapeout GDS submission.

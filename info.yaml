@@ -1,0 +1,85 @@
+---
+# Tiny Tapeout project information
+project:
+  title:        "Reticulum Network Crypto Accelerator"
+  author:       "Glenn Lewis"
+  discord:      "gmlewis"
+  description:  "Hardware cryptographic accelerator for Reticulum Network Stack (SHA-256 PoW stamp grinding, X25519 ECDH, AES-128-CBC, HMAC-SHA256)."
+  language:     "Verilog"
+  clock_hz:     50000000
+
+  # How many tiles your design occupies? A single tile is about 167x108 uM.
+  tiles: "4x2"          # 4 wide by 2 high
+
+  # Your top module name must start with "tt_um_"
+  top_module:  "tt_um_gmlewis_reticulum"
+
+  # List your project's source files here.
+  # Source files must be in ./src and you must list each input file separately
+  source_files:
+    - "tt_um_gmlewis_reticulum.v"
+
+# Pinout definition
+pinout:
+  # Inputs
+  ui[0]: "qspi_sclk"
+  ui[1]: "qspi_cs_n"
+  ui[2]: "reserved"
+  ui[3]: "reserved"
+  ui[4]: "reserved"
+  ui[5]: "reserved"
+  ui[6]: "reserved"
+  ui[7]: "reserved"
+
+  # Outputs
+  uo[0]: "qspi_irq_n"
+  uo[1]: "busy"
+  uo[2]: "heartbeat"
+  uo[3]: "reserved"
+  uo[4]: "reserved"
+  uo[5]: "reserved"
+  uo[6]: "reserved"
+  uo[7]: "reserved"
+
+  # Bidirectional pins
+  uio[0]: "qspi_io0"
+  uio[1]: "qspi_io1"
+  uio[2]: "qspi_io2"
+  uio[3]: "qspi_io3"
+  uio[4]: "reserved"
+  uio[5]: "reserved"
+  uio[6]: "reserved"
+  uio[7]: "reserved"
+
+# Do not change!
+yaml_version: 6
+
+# Documentation
+documentation:
+  author: "Glenn Lewis"
+  discord: "gmlewis"
+  title: "Reticulum Network Crypto Accelerator"
+  description: |
+    The Reticulum Network Crypto Accelerator is a specialized hardware coprocessor designed to accelerate the core cryptographic primitives of the Reticulum Network Stack (RNS) and LXMF messaging protocol.
+    It offloads:
+    1. Reticulum IFAC Proof-of-Work (PoW) Stamp Grinding (SHA-256 pipeline with on-chip nonce iteration and leading-zero detection).
+    2. X25519 Elliptic Curve Diffie-Hellman (ECDH) Montgomery Ladder key exchange over Curve25519 (256-bit modular field multiplier).
+    3. Reticulum & LXMF Token Security Envelopes (pipelined AES-128-CBC encryption/decryption coupled with HMAC-SHA256 authentication tag generation and verification).
+  how_it_works: |
+    The chip communicates with a host microcontroller (such as an ESP32, ESP32-C5, STM32, Raspberry Pi RP2040/RP2350, or Linux SBC) via a Quad-SPI (QSPI) bus operating in Mode 0 up to 25-50 MHz.
+    Commands and payloads are streamed over the 4-bit bidirectional data bus (uio[3:0]). When an operation completes, the chip asserts the active-low interrupt line (uo_out[0]).
+    Internal autonomous engines compute hashes, Montgomery ladder scalar multiplications, and authenticated encryption without host CPU intervention.
+  how_to_test: |
+    1. Supply 50 MHz clock on clk and pulse rst_n low to reset the chip. Verify that uo_out[2] toggles at ~1.5 Hz (diagnostic heartbeat).
+    2. Assert ui_in[1] (CS#) low, and send OP_STATUS (0x01) over QSPI with length 0. Read 4 status bytes on uio[3:0]. Byte 1 should read 0x10 (Architecture Version).
+    3. Send an OP_X25519_MULT command with 32-byte scalar and 32-byte u-coordinate. Monitor uo_out[1] (busy) going high, then uo_out[0] (irq_n) going low when complete. Read the 32-byte shared secret via OP_X25519_READ.
+    4. Run the automated cocotb test suite (make -C test) which validates all cryptographic modes against standard test vectors.
+  external_hw: |
+    Connect to any microcontroller or FPGA via 6 pins:
+    - SCLK -> ui_in[0]
+    - CS#  -> ui_in[1]
+    - IO0  -> uio[0]
+    - IO1  -> uio[1]
+    - IO2  -> uio[2]
+    - IO3  -> uio[3]
+    - IRQ# -> uo_out[0]
