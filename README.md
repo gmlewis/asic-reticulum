@@ -11,6 +11,8 @@ Hardware accelerator ASIC for the [Reticulum Network Stack](https://reticulum.ne
 This project implements the silicon offload targets specified in [`ASIC-Plans.md`](https://github.com/gmlewis/go-reticulum/blob/master/ASIC-Plans.md),
 targeting open-source silicon flows (**Tiny Tapeout**, **OpenLane**, **SkyWater sky130**, and **IHP SG13G2**).
 
+For an exhaustive technical deep-dive into all design decisions, mathematical formulations, hardware pipelines, and verification results from Milestones 0 through 9, see [`Design-Walkthrough.md`](Design-Walkthrough.md).
+
 ---
 
 ## 1. Architectural Overview
