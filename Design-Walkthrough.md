@@ -37,6 +37,13 @@
   - [Walkthrough](#milestone-9-walkthrough)
 - [Global Verification Summary & Complete Test Matrix](#global-verification-summary--complete-test-matrix)
 - [Performance, Silicon Area & Speedup Benchmarks](#performance-silicon-area--speedup-benchmarks)
+- [DIY Handheld Implementations: Form Factor A & Form Factor B](#diy-handheld-implementations-form-factor-a--form-factor-b)
+  - [Form Factor A: The Pocket Linux Terminal (Pi Zero 2W / Milk-V + Reticulum Hat)](#form-factor-a-the-pocket-linux-terminal-raspberry-pi-zero-2w--milk-v-duo-s)
+  - [Form Factor B: The All-in-One ESP32-C5 Pocket Hub & Communicator](#form-factor-b-the-all-in-one-esp32-c5-pocket-hub--communicator)
+  - [Universal PCBWay Hat & Carrier Board Specification](#universal-pcbway-hat--carrier-board-specification)
+  - [Networking, Remote Bridging & User Experience](#networking-remote-bridging--user-experience)
+  - [Bill of Materials (BOM) & Sourcing Guide](#bill-of-materials-bom--sourcing-guide)
+  - [Actionable Implementation Roadmap](#actionable-implementation-roadmap)
 
 ---
 
@@ -2115,3 +2122,227 @@ Measurements taken at 50 MHz ASIC / FPGA clock frequency compared against an ESP
 1. **Hardware Speed vs. Bus Wire Speed**: An authenticated Token seal takes $4.2\ \mu\text{s}$ on-chip. Transferring the payload over QSPI at 40 MHz takes $25\ \mu\text{s}$. Hardware computation is **$6\times$ faster than physical wire transport**, confirming that a single TokenEngine ($N=1$) on Tiny Tapeout easily saturates the host interface.
 2. **Battery Preservation**: Offloading stamp grinding and link handshakes cuts MCU active run time by $>98\%$, enabling multi-week battery life for portable and solar Reticulum nodes.
 3. **Zero Host CPU Stalls**: Dedicated hardware IRQ and DMA streaming completely eliminate CPU busy-waiting, preserving 100% of host CPU cycles for packet routing, mesh transport, and user applications.
+
+---
+
+# DIY Handheld Implementations: Form Factor A & Form Factor B
+
+This section provides the complete blueprint for realizing the Reticulum Hardware Crypto Accelerator in an open-source, maker-friendly DIY handheld communicator. The design is split into two complementary hardware form factors sharing a unified modular architecture:
+- **Form Factor A**: A **Linux-based handheld terminal** pairing an inexpensive SBC (Raspberry Pi Zero 2W or Milk-V Duo S) with a custom **PCBWay Reticulum Hat**, running the full interactive `gonomadnet` TUI and `gorrcd` daemon today with zero software modifications.
+- **Form Factor B**: A **standalone ultra-low-power microcontroller handheld** powered by the **ESP32-C5**, functioning as an autonomous pocket chat hub and off-grid communicator with weeks of standby battery life.
+
+---
+
+## Form Factor A: The Pocket Linux Terminal (Raspberry Pi Zero 2W / Milk-V Duo S)
+
+Form Factor A is engineered for immediate, uncompromised deployment of the existing Go software stack (`go-nomadnet` and `go-reticulum`). It executes stock Linux binaries with full `tview`/`tcell` interactive graphics, client-side conversation caching, and page rendering.
+
+```
++--------------------------------------------------------------------------+
+|                       Handheld Reticulum Pocket Deck                     |
+|                                                                          |
+|  [2.8" SPI/DSI Display (320x240)]        [Status LEDs: IRQ, Busy, Mesh]  |
+|                                                                          |
+|  +--------------------------------------------------------------------+  |
+|  | Base Processor: Raspberry Pi Zero 2W ($15) or Milk-V Duo S ($9)    |  |
+|  |   - Quad-core 64-bit ARM / RISC-V with 512 MB RAM                  |  |
+|  |   - Boots Linux in 5s; auto-starts gorrcd & gonomadnet in systemd   |  |
+|  +---------------------------------+----------------------------------+  |
+|                                    | 40-Pin GPIO Header                  |
+|                                    v                                     |
+|  +--------------------------------------------------------------------+  |
+|  | Custom PCBWay "Reticulum Radio & Crypto Accelerator Hat"           |  |
+|  |                                                                    |  |
+|  |   +--------------------------+    +----------------------------+   |  |
+|  |   | Semtech SX1262 LoRa SPI  |    | ESP32-C5 Co-Processor     |   |  |
+|  |   | (868/915 MHz Mesh Radio) |    | (Dual-Band 2.4/5GHz Wi-Fi6 |   |  |
+|  |   +--------------------------+    | + BLE 5 + SoftAP Bridge)   |   |  |
+|  |                                   +----------------------------+   |  |
+|  |   +------------------------------------------------------------+   |  |
+|  |   | Tiny Tapeout / FPGA Socket (7-pin QSPI + Hardware IRQ)     |   |  |
+|  |   | (Tang Primer 25K PMOD header or Tiny Tapeout chip carrier) |   |  |
+|  |   +------------------------------------------------------------+   |  |
+|  |                                                                    |  |
+|  |   +------------------------------------------------------------+   |  |
+|  |   | Power & Battery: AXP2101 / TP4056 + LiPo (2000 mAh)        |   |  |
+|  |   +------------------------------------------------------------+   |  |
+|  +--------------------------------------------------------------------+  |
+|                                                                          |
+|  [Blackberry Q10 I2C Keyboard / M5Stack CardKB]                          |
++--------------------------------------------------------------------------+
+```
+
+### Architectural Highlights
+1. **Immediate Software Parity**: Clones and compiles `github.com/gmlewis/go-nomadnet` and `github.com/gmlewis/go-reticulum` out of the box. No bare-metal CGo shims or missing stdlib dependencies.
+2. **Dual-Band Connectivity**:
+   - Pi Zero 2W onboard Wi-Fi connects to home Wi-Fi or mobile hotspots, creating a `TCPClientInterface` to remote global Reticulum servers.
+   - The Hat's onboard **Semtech SX1262** transceives long-range off-grid packets at 868/915 MHz via `RNodeInterface`.
+   - The Hat's **ESP32-C5** operates as a high-speed **5 GHz SoftAP**, allowing nearby smartphones or laptops to connect wirelessly to the pocket unit's local `gorrcd` chat hub.
+3. **Hardware Acceleration**: The Pi Zero streams encryption jobs to the Tiny Tapeout ASIC (or Tang Primer 25K FPGA) over SPI/QSPI, offloading Hashcash stamp generation and bulk room broadcast encryption.
+
+---
+
+## Form Factor B: The All-in-One ESP32-C5 Pocket Hub & Communicator
+
+Form Factor B is an ultra-low-power, instant-boot handheld built entirely around the **ESP32-C5 (Single-core RISC-V @ 240 MHz with 8–16 MB OPI PSRAM)**.
+
+```
++--------------------------------------------------------------------------+
+|                  All-in-One ESP32-C5 Reticulum Communicator              |
+|                                                                          |
+|  +---------------------+   4-bit QSPI @ 80 MHz      +----------------+  |
+|  | ESP32-C5 MCU        |<==========================>| Crypto ASIC    |  |
+|  | - RV32IMAC @ 240 MHz|   CLK, CS, IO[0..3] (GDMA) | (SpinalHDL)    |  |
+|  | - 400 KB SRAM       |                            | - QSPI Slave   |  |
+|  | - 8–16 MB OPI PSRAM |   Active-Low IRQ Line      | - SHA-256 pipe |  |
+|  | - 16 MB Flash       |<---------------------------| - X25519 ladder|  |
+|  +----------+----------+   (Interrupt on Done)      | - AES+HMAC tok |  |
+|             |                                       +----------------+  |
+|             | SPI                                                       |
+|             v                                                           |
+|  +---------------------+   I2C (STEMMA QT)          +----------------+  |
+|  | Semtech SX1262 LoRa |<-------------------------->| CardKB / BBQ10 |  |
+|  | (868/915 MHz Mesh)  |                            | QWERTY Keypad  |  |
+|  +---------------------+   SPI                      +----------------+  |
+|             |                                                           |
+|             v                                                           |
+|  +---------------------+   Built-in Radios:                             |
+|  | 2.8" ST7789 TFT LCD |   - Dual-Band Wi-Fi 6 (2.4 GHz + 5 GHz AP)     |
+|  | (Micron Framebuffer)|   - Bluetooth 5 (LE) for smartphone pairing    |
+|  +---------------------+                                                |
++--------------------------------------------------------------------------+
+```
+
+### Operational Modes
+1. **Autonomous Pocket Hub Mode (Screen Sleeping / Backpack Mode)**:
+   - Device rests in a bag or vehicle drawing $< 35	ext{ mA}$.
+   - Runs `gorrcd` as a permanent local chat hub and propagation node.
+   - Listens on LoRa for incoming mesh packets; broadcasts a 5 GHz Wi-Fi 6 SoftAP.
+   - Anyone nearby connects their phone or laptop to the Wi-Fi AP, opens NomadNet, and accesses local channels hosted directly on the device.
+2. **Handheld Terminal Mode (Micron Framebuffer)**:
+   - Dedicated lightweight Micron UI: parses Micron formatting tags (`>>`, `*bold*`, `_underline_`, `|field|`, `"link":target`) and renders directly to the LCD framebuffer.
+   - Allows composing LXMF messages, browsing pages, and posting to RRC channels directly from the keypad without external devices.
+
+---
+
+## Universal PCBWay Hat & Carrier Board Specification
+
+To enable makers to build **either Form Factor A or Form Factor B** from a single modular PCB design, the board is laid out as a **Universal Reticulum Hat & Carrier**:
+
+### 1. Board Geometry & Sockets
+- **Dimensions**: Standard 65 mm × 56 mm (Raspberry Pi HAT form factor with mounting holes).
+- **MCU Footprint**: Dual female 2.54 mm socket headers accepting an **ESP32-C5-DevKitC-1** directly.
+- **Pi Header**: 40-pin female stacking header on the bottom side for mating with a Raspberry Pi Zero 2W or Milk-V Duo S.
+- **LoRa Footprint**: SMD solder pads and breakout pins for an **EBYTE E22-900M22S (SX1262, 22 dBm / 160 mW)** with edge-launch SMA antenna connector.
+- **Accelerator Header**: Dual-row $2	imes 5$ pin header supporting the **7-pin QSPI + IRQ** bus (mates with Tiny Tapeout carrier demo board or Sipeed Tang Primer 25K PMOD).
+- **Display Port**: 8-pin 2.54 mm header and 0.5 mm FPC connector for 2.4"/2.8" SPI TFT displays (ST7789 / ILI9341).
+- **Keyboard Port**: 4-pin STEMMA QT / Qwiic JST-SH connector carrying 3.3V, GND, SDA, and SCL.
+- **Power Subsystem**: Onboard TP4056 or AXP2101 LiPo charger with USB-C input, power path management, and JST-PH battery connector.
+
+### 2. ESP32-C5 Pin Allocation Table
+
+| Peripheral Group | Signal | ESP32-C5 GPIO | Hardware Function |
+| :--- | :--- | :---: | :--- |
+| **QSPI Crypto ASIC / FPGA** | `SCLK` | `GPIO 6` | SPI2 bus clock (40–80 MHz) |
+| | `CS#` | `GPIO 7` | Active-low chip select |
+| | `IO0` | `GPIO 2` | Quad data 0 (MOSI) |
+| | `IO1` | `GPIO 3` | Quad data 1 (MISO) |
+| | `IO2` | `GPIO 4` | Quad data 2 (WP#) |
+| | `IO3` | `GPIO 5` | Quad data 3 (HOLD#) |
+| | `IRQ#` | `GPIO 8` | Active-low completion interrupt |
+| **Semtech SX1262 LoRa Radio** | `SCK` | `GPIO 10` | Dedicated LoRa SPI clock |
+| | `MOSI` | `GPIO 11` | Dedicated LoRa MOSI |
+| | `MISO` | `GPIO 12` | Dedicated LoRa MISO |
+| | `NSS` | `GPIO 13` | Active-low LoRa chip select |
+| | `BUSY` | `GPIO 14` | RF busy indicator |
+| | `DIO1` | `GPIO 15` | Packet RX/TX done interrupt |
+| **I2C Keypad & Power** | `SDA` | `GPIO 18` | STEMMA QT / Qwiic Data (CardKB / BBQ10) |
+| | `SCL` | `GPIO 19` | STEMMA QT / Qwiic Clock |
+| **SPI Display (ST7789)** | `LCD_CS` | `GPIO 20` | Display chip select |
+| | `LCD_DC` | `GPIO 21` | Data / Command select |
+| | `LCD_RST`| `GPIO 22` | Display hardware reset |
+| | `LCD_BL` | `GPIO 23` | Backlight brightness PWM control |
+
+*(Total GPIO budget: 20 pins used out of 24 available, leaving 4 GPIOs for battery voltage monitoring and expansion).*
+
+---
+
+## Networking, Remote Bridging & User Experience
+
+The handheld functions as a seamless **Internet-to-LoRa mesh gateway**:
+
+```
+[ Remote Reticulum Hub ] (e.g. Dublin Testnet / Community Node)
+           ^
+           |  Encrypted Reticulum Protocol over TCP (Port 4242)
+           v
+[ Wi-Fi / Hotspot ]
+           ^
+           |  TCPClientInterface
+           v
++--------------------------------------------------------------------------+
+|                  Handheld Reticulum Communicator (Hat)                   |
+|                                                                          |
+|  - Runs gorrcd Chat Hub Daemon & gonomadnet Client                      |
+|  - Offloads Proof-of-Work Stamps & Token Encryption to QSPI ASIC         |
+|  - Routes packets between Internet TCP and Local Mesh Radio              |
++--------------------------------------------------------------------------+
+           ^
+           |  LoRa Radio Packets (868/915 MHz, RNodeInterface)
+           v
+[ Local Off-Grid Mesh Peers ] (Handhelds, RNodes, Sensor Leaves)
+```
+
+### Out-of-the-Box User Workflow:
+1. **Power On**: System boots in 5 seconds. `gorrcd` initiates local chat channels (`#general`, `#emergency`).
+2. **Configure Upstream Hub**:
+   From the keyboard or config menu:
+   ```ini
+   [[TCP Interface]]
+     type = TCPClientInterface
+     enabled = yes
+     target_host = reticulum.example.org
+     target_port = 4242
+   ```
+3. **Simultaneous Local & Global Chat**:
+   - When communicating with local peers across town, packets travel over **LoRa**.
+   - When communicating with global rooms or fetching remote Micron pages, packets travel over **Wi-Fi via TCPClientInterface**.
+   - The device acts as an autonomous relay: local LoRa users can reach global rooms through your handheld's internet uplink without having internet access themselves!
+4. **Hardware Acceleration in Action**:
+   - Sending an announcement or stamp: The ASIC grinds candidate nonces in $\sim 1	ext{ ms}$, saving battery and CPU.
+   - Sending a chat message to 50 users: The ASIC executes 50 distinct AES-128-CBC + HMAC-SHA256 operations in **0.21 ms**, providing zero-latency room broadcast fanout.
+
+---
+
+## Bill of Materials (BOM) & Sourcing Guide
+
+| Component | Description | Est. Unit Cost | Sourcing Options |
+| :--- | :--- | :---: | :--- |
+| **ESP32-C5-DevKitC-1** | Dual-Band Wi-Fi 6 (2.4/5GHz) + BLE 5 RISC-V board | ~$7–$9 | [Mouser](https://www.mouser.com/c/?q=ESP32-C5-DevKit) / [AliExpress](https://www.aliexpress.com/wholesale?SearchText=ESP32-C5+development+board) |
+| **Raspberry Pi Zero 2W** *(Form Factor A only)* | Quad-core 64-bit ARM Linux host | ~$15 | Adafruit / PiShop / Pimoroni |
+| **SX1262 LoRa Module** | EBYTE E22-900M22S (868/915 MHz, 22 dBm, IPEX/SMA) | ~$4–$5 | [AliExpress](https://www.aliexpress.com/wholesale?SearchText=E22-900M22S) / [Amazon](https://www.amazon.com/s?k=E22-900M22S) |
+| **2.8" SPI TFT LCD** | 320×240 ST7789 or ILI9341 display with touch | ~$5–$7 | [AliExpress](https://www.aliexpress.com/wholesale?SearchText=2.8+inch+SPI+TFT+ST7789) / Amazon |
+| **QWERTY Keypad** | M5Stack CardKB ($6) or Solder Party BB Q10 ($12) | ~$6–$12 | [M5Stack](https://shop.m5stack.com/products/cardkb-mini-keyboard-programmable-unit-v1-1) / Tindie |
+| **FPGA / ASIC Accelerator** | Sipeed Tang Primer 25K Dock (Milestone 8) or Tiny Tapeout | ~$35 | [AliExpress](https://www.aliexpress.com/wholesale?SearchText=Tang+Primer+25K+Dock) / Tiny Tapeout |
+| **Custom Hat PCB** | 2-layer ENIG PCB (batch of 5 boards) | ~$5 (+$15 ship) | [PCBWay](https://www.pcbway.com) |
+| **LiPo Battery** | 3.7V 2000 mAh flat pouch cell with protection circuit | ~$6 | AliExpress / Amazon |
+| **Total Hardware Cost** | **Complete Off-Grid Pocket Communicator** | **~$35 – $48** | *(excluding optional FPGA)* |
+
+---
+
+## Actionable Implementation Roadmap
+
+1. **Phase 1: Breadboard Electrical Validation**:
+   - Connect the **ESP32-C5-DevKitC-1** to the **Sipeed Tang Primer 25K** using the 7-pin QSPI wiring table.
+   - Wire an SX1262 breakout module on dedicated SPI pins.
+   - Run `hil_test_runner.py` and verify packet dispatch across QSPI, LoRa, and Wi-Fi.
+2. **Phase 2: KiCad Schematic & PCB Layout**:
+   - Create the KiCad project for the **Universal Reticulum Hat**:
+     - Raspberry Pi 40-pin header + ESP32-C5 female headers.
+     - EBYTE E22-900M22S footprint + SMA connector.
+     - 7-pin QSPI PMOD/TT socket.
+     - STEMMA QT I2C connector and ST7789 display header.
+   - Export Gerber and drill files; manufacture prototype batch at PCBWay.
+3. **Phase 3: Software & Firmware Deployment**:
+   - **Form Factor A**: Create a pre-built SD card image for Raspberry Pi Zero 2W running Raspberry Pi OS Lite, auto-starting `gorrcd` and `gonomadnet` as systemd services on the LCD.
+   - **Form Factor B**: Package `gorrcd` with ESP-IDF / TinyGo firmware for the ESP32-C5 with Wi-Fi AP provisioning, remote `TCPClientInterface`, and the lightweight Micron framebuffer driver.
