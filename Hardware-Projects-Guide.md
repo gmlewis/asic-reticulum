@@ -46,7 +46,7 @@ Welcome to the **Reticulum Hardware Projects Guide**! This document provides eve
 | **Networking** | LoRa + Wi-Fi client + Bluetooth | LoRa + Wi-Fi 6 + Bluetooth | LoRa + Wi-Fi 6 SoftAP Repeater |
 | **Core Software** | Full `gonomadnet` TUI + `gorrcd` | Embedded `gonomadnet` / `gornsd` | Standalone **`gorrcd` daemon ONLY** |
 | **Typical Battery Life** | 4–6 hours (1500–2500 mAh LiPo) | 12–18 hours (1500–2500 mAh LiPo) | 24–48 hours (or indefinite on solar) |
-| **Hardware Crypto** | Tiny Tapeout ASIC / Tang Primer FPGA | Tiny Tapeout ASIC / Tang Primer FPGA | Tiny Tapeout ASIC / Tang Primer FPGA |
+| **Hardware Crypto** | **Optional** (ASIC/FPGA offload, or pure-Go CPU software) | **Optional** (ASIC/FPGA offload, or MCU software) | **Optional** (ASIC/FPGA offload, or MCU software) |
 
 ---
 
@@ -112,6 +112,17 @@ The **Pocket Linux Terminal** is the ultimate handheld Reticulum computer. It bo
 | **Cable** | 4-pin STEMMA QT / Qwiic JST-SH Cable (100mm) | [Adafruit #4210](https://www.adafruit.com/product/4210) | ~$1.50 |
 | *(Optional)* **Crypto** | Tiny Tapeout 08/09/10 Carrier or Tang Primer 25K | [Tiny Tapeout](https://tinytapeout.com) / [Sipeed](https://sipeed.com) | ~$25–45 |
 
+> [!NOTE]
+> ### Why is Hardware Crypto Optional? (Software Fallback)
+> **You do NOT need the Tiny Tapeout ASIC or Tang Primer FPGA to build and use this terminal!**
+>
+> - **100% Software Fallback**: All Reticulum and LXMF cryptographic algorithms (Ed25519 signing/verification, X25519 ECDH key exchange, AES-128-CBC packet encryption, HMAC-SHA256 authentication, and SHA-256 LXMF Hashcash stamp grinding) are natively implemented in pure Go using standard library primitives. The Raspberry Pi Zero 2W's quad-core 64-bit ARM CPU handles all of them natively in software without any extra hardware.
+> - **Standard Binaries**: If you don't have the crypto accelerator chip, simply download the standard pre-compiled binaries (`gonomadnet-pocket_terminal-linux-arm64`, `gorrcd-pocket_terminal-linux-arm64`, `gornsd-pocket_terminal-linux-arm64`). Everything works out of the box.
+> - **What the ASIC / FPGA Adds (When Installed)**:
+>   - **LXMF Stamp Grinding (Proof-of-Work)**: Hardware SHA-256 engine with midstate restore grinds high-difficulty stamps in milliseconds instead of seconds, without pegging CPU cores at 100%.
+>   - **X25519 & Token Encryption**: Offloads scalar multiplication and packet burst encryption (such as fanouts in busy RRC chat rooms).
+>   - **Battery Conservation**: The dedicated silicon draws only a few milliwatts, preventing CPU thermal throttling and substantially extending battery life on an off-grid handheld.
+
 ### 2. Files to Download from GitHub
 
 Directly download the latest standalone binaries without git or Go toolchains:
@@ -128,7 +139,9 @@ curl -LO https://github.com/gmlewis/go-reticulum/releases/latest/download/gornsd
 curl -LO https://github.com/gmlewis/go-reticulum/releases/latest/download/gornstatus-pocket_terminal-linux-arm64
 ```
 
-*(If you are using the Tiny Tapeout ASIC or Tang Primer FPGA crypto accelerator, download `gorrcd-pocket_terminal-asic-linux-arm64` and `gornsd-pocket_terminal-asic-linux-arm64` instead).*
+> [!TIP]
+> - **No crypto chip?** Use the 4 standard downloads above. All cryptography runs smoothly in software on the Pi's CPU.
+> - **Have the ASIC or FPGA chip plugged into the QSPI socket?** Download `gorrcd-pocket_terminal-asic-linux-arm64` (or `-fpga-`) and `gornsd-pocket_terminal-asic-linux-arm64` instead to enable hardware acceleration.
 
 ### 3. Hardware Assembly Step-by-Step
 
