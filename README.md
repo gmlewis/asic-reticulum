@@ -54,7 +54,9 @@ asic-reticulum/
 │   │       │   ├── Sha256Constants.scala  # FIPS 180-4 H0 vector and K0..K63 constants
 │   │       │   ├── Sha256Round.scala      # Single-cycle SHA-256 compression step
 │   │       │   ├── Sha256Pipe.scala       # Pipelined SHA-256 engine with midstate restore
-│   │       │   └── Stamper.scala          # Autonomous IFAC Hashcash stamp grinder
+│   │       │   ├── Stamper.scala          # Autonomous IFAC Hashcash stamp grinder
+│   │       │   ├── Field25519.scala       # GF(2^255-19) modular arithmetic primitives
+│   │       │   └── X25519Ladder.scala     # Constant-time Montgomery ladder X25519 engine
 │   │       └── bus/
 │           ├── QspiSlave.scala          # 4-bit QSPI slave transceiver with Stream RX/TX
 │           ├── QspiCommandDecoder.scala    # Command decoder FSM & accelerator control lines
@@ -65,7 +67,9 @@ asic-reticulum/
 │       │   ├── LeadZeroCounterTest.scala # 32-bit & 256-bit priority sweeps
 │       │   ├── Sha256RoundTest.scala     # FIPS vectors & randomized stress tests
 │       │   ├── Sha256PipeTest.scala      # Pipelining, midstate restore & backpressure tests
-│       │   └── StamperTest.scala         # Autonomous candidate search & IRQ verification
+│       │   ├── StamperTest.scala         # Autonomous candidate search & IRQ verification
+│       │   ├── Field25519Test.scala      # GF(2^255-19) add/sub/mul/sqr/reduction tests
+│       │   └── X25519LadderTest.scala    # RFC 7748 Vectors 1 & 2 + abort verification
 │       ├── bus/
 │       │   ├── QspiSlaveTest.scala          # Multi-byte RX/TX & CS frame reset tests
 │       │   ├── QspiCommandDecoderTest.scala # Opcode decoding, payload streaming & IRQ pulses
@@ -130,6 +134,14 @@ To generate standard, synthesis-ready Verilog into `hw/gen/`:
   ```bash
   sbt "runMain reticulum.bus.QspiSlaveVerilog"
   ```
+- **Generate Field Multiplier (`FieldMultiplier.v`)**:
+  ```bash
+  sbt "runMain reticulum.crypto.FieldMultiplierVerilog"
+  ```
+- **Generate X25519 Montgomery Ladder (`X25519Ladder.v`)**:
+  ```bash
+  sbt "runMain reticulum.crypto.X25519LadderVerilog"
+  ```
 - **Generate Top-Level QSPI Crypto Engine (`QspiTop.v`)**:
   ```bash
   sbt "runMain reticulum.bus.QspiTopVerilog"
@@ -141,6 +153,8 @@ cat hw/gen/LeadZeroCounter.v
 cat hw/gen/Sha256Round.v
 cat hw/gen/Sha256Pipe.v
 cat hw/gen/Stamper.v
+cat hw/gen/FieldMultiplier.v
+cat hw/gen/X25519Ladder.v
 cat hw/gen/QspiSlave.v
 cat hw/gen/QspiTop.v
 ```
@@ -155,6 +169,6 @@ cat hw/gen/QspiTop.v
 - [x] **Milestone 3**: Autonomous IFAC Hashcash Stamp Grinder with nonce streaming and `meetsTarget` interrupt assertion.
 - [x] **Milestone 4**: 4-bit QSPI slave interface (`Stream` handshake + command decoder FSM + 7-pin `QspiTop` integration).
 - [x] **Milestone 5**: Verification harness comparing SpinalSim / Verilator against `go-reticulum` golden test vectors.
-- [ ] **Milestone 6**: Montgomery ladder (X25519 / Ed25519) field arithmetic core.
+- [x] **Milestone 6**: Montgomery ladder (X25519 / Ed25519) field arithmetic core.
 - [ ] **Milestone 7**: AES-128-CBC + HMAC-SHA256 Token engine.
 - [ ] **Milestone 8**: Top-level chip integration, OpenLane synthesis, and Tiny Tapeout GDS submission.

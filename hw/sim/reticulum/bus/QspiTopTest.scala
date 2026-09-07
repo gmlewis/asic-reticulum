@@ -228,4 +228,67 @@ class QspiTopTest extends AnyFunSuite {
       assert(dut.io.irq_n.toBoolean, "irq_n should return high after OP_IRQ_CLEAR")
     }
   }
+
+  test("QspiTop: End-to-end X25519 scalar multiplication, hardware IRQ, and result readout over QSPI") {
+    SimConfig.compile(QspiTop(roundsPerStage = 1)).doSim { dut =>
+      dut.clockDomain.forkStimulus(period = 10)
+      dut.io.sclk #= false
+      dut.io.cs_n #= true
+      dut.io.data_in #= 0
+      dut.clockDomain.waitSampling(5)
+
+      assert(dut.io.irq_n.toBoolean, "irq_n should start high (inactive)")
+
+      // RFC 7748 Vector 1
+      val scalarHex = "a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4"
+      val uHex      = "e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c"
+      val expHex    = "c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552"
+
+      val scalarBytes = hexToBytes(scalarHex)
+      val uBytes      = hexToBytes(uHex)
+      val payload     = scalarBytes ++ uBytes
+      assert(payload.length == 64)
+
+      // 1. Host dispatches OP_X25519_MULT over 4-bit QSPI
+      qspiSendCommand(dut, QspiOpcode.OP_X25519_MULT, payload)
+
+      // 2. Host waits for hardware interrupt (irq_n going low)
+      var waitCycles = 0
+      val maxWait    = 6000
+      while (dut.io.irq_n.toBoolean && waitCycles < maxWait) {
+        dut.clockDomain.waitSampling(10)
+        waitCycles += 10
+      }
+
+      assert(!dut.io.irq_n.toBoolean, s"irq_n was not asserted low within $maxWait cycles")
+
+      // 3. Host reads back 32-byte result via OP_X25519_READ
+      dut.io.cs_n #= false
+      dut.clockDomain.waitSampling(4)
+
+      qspiWriteByte(dut, QspiOpcode.OP_X25519_READ)
+      qspiWriteByte(dut, 0x00)
+      qspiWriteByte(dut, 0x00)
+
+      dut.clockDomain.waitSampling(8)
+
+      val resultBytes = collection.mutable.ArrayBuffer[Int]()
+      for (_ <- 0 until 32) {
+        resultBytes += qspiReadByte(dut)
+      }
+
+      dut.clockDomain.waitSampling(4)
+      dut.io.cs_n #= true
+      dut.clockDomain.waitSampling(5)
+
+      val gotHex = bytesToHex(resultBytes.toSeq)
+      assert(gotHex == expHex, f"X25519 QSPI result mismatch: expected $expHex, got $gotHex")
+
+      // 4. Host clears interrupt via OP_IRQ_CLEAR
+      qspiSendCommand(dut, QspiOpcode.OP_IRQ_CLEAR)
+      dut.clockDomain.waitSampling(5)
+
+      assert(dut.io.irq_n.toBoolean, "irq_n should return high (inactive) after OP_IRQ_CLEAR")
+    }
+  }
 }

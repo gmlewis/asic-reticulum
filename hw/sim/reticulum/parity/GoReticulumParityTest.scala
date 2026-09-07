@@ -3,7 +3,7 @@ package reticulum.parity
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.prop.TableDrivenPropertyChecks._
 import reticulum.bus.{QspiOpcode, QspiTop}
-import reticulum.crypto.{Sha256Pipe, Stamper}
+import reticulum.crypto.{Sha256Pipe, Stamper, X25519Ladder}
 import spinal.core._
 import spinal.core.sim._
 
@@ -322,6 +322,118 @@ class GoReticulumParityTest extends AnyFunSuite {
           gotDigestHex == c.expectedDigestHex,
           s"${c.name}: Hash mismatch:\n  got:  $gotDigestHex\n  want: ${c.expectedDigestHex}"
         )
+      }
+    }
+  }
+
+  def hexToBigIntLE(hex: String): BigInt = {
+    val bytes = hex.sliding(2, 2).toArray.map(s => Integer.parseInt(s, 16).toByte)
+    var bi = BigInt(0)
+    for (i <- 0 until bytes.length) {
+      bi |= (BigInt(bytes(i) & 0xFF) << (i * 8))
+    }
+    bi
+  }
+
+  def bigIntToHexLE(bi: BigInt): String = {
+    val sb = new StringBuilder
+    for (i <- 0 until 32) {
+      val b = (bi >> (i * 8)) & 0xFF
+      sb.append(f"$b%02x")
+    }
+    sb.toString()
+  }
+
+  test("X25519: table-driven parity against go-reticulum golden vectors") {
+    val x25519Table = Table(
+      "case",
+      GoldenVectors.x25519Cases: _*
+    )
+
+    SimConfig.compile(X25519Ladder()).doSim { dut =>
+      dut.clockDomain.forkStimulus(period = 10)
+      dut.io.start #= false
+      dut.io.abort #= false
+      dut.io.irqClear #= false
+      dut.clockDomain.waitSampling(5)
+
+      forAll(x25519Table) { c =>
+        dut.io.scalar #= hexToBigIntLE(c.scalarHex)
+        dut.io.uCoord #= hexToBigIntLE(c.uCoordHex)
+        dut.io.start #= true
+        dut.clockDomain.waitSampling()
+        dut.io.start #= false
+        dut.clockDomain.waitSampling()
+
+        dut.clockDomain.waitSamplingWhere(dut.io.done.toBoolean)
+        val gotSharedHex = bigIntToHexLE(dut.io.result.toBigInt)
+        assert(
+          gotSharedHex == c.expectedSharedHex,
+          s"${c.name}: Shared secret mismatch:\n  got:  $gotSharedHex\n  want: ${c.expectedSharedHex}"
+        )
+      }
+    }
+  }
+
+  test("QspiTop: end-to-end X25519 QSPI streaming parity against go-reticulum golden vectors") {
+    val x25519Table = Table(
+      "case",
+      GoldenVectors.x25519Cases: _*
+    )
+
+    SimConfig.compile(QspiTop(roundsPerStage = 1)).doSim { dut =>
+      dut.clockDomain.forkStimulus(period = 10)
+      dut.io.sclk #= false
+      dut.io.cs_n #= true
+      dut.io.data_in #= 0
+      dut.clockDomain.waitSampling(5)
+
+      forAll(x25519Table) { c =>
+        val scalarBytes = hexToBytes(c.scalarHex)
+        val uBytes      = hexToBytes(c.uCoordHex)
+        val payload     = scalarBytes ++ uBytes
+        assert(payload.length == 64)
+
+        // 1. Dispatch OP_X25519_MULT
+        qspiSendCommand(dut, QspiOpcode.OP_X25519_MULT, payload)
+
+        // 2. Await hardware IRQ (active low)
+        var waitCycles = 0
+        val maxWait    = 6000
+        while (dut.io.irq_n.toBoolean && waitCycles < maxWait) {
+          dut.clockDomain.waitSampling(10)
+          waitCycles += 10
+        }
+        assert(!dut.io.irq_n.toBoolean, s"${c.name}: IRQ was not asserted low within $maxWait cycles")
+
+        // 3. Read back 32-byte shared secret via OP_X25519_READ
+        dut.io.cs_n #= false
+        dut.clockDomain.waitSampling(4)
+
+        qspiWriteByte(dut, QspiOpcode.OP_X25519_READ)
+        qspiWriteByte(dut, 0x00)
+        qspiWriteByte(dut, 0x00)
+        dut.clockDomain.waitSampling(8)
+
+        val resultBytes = collection.mutable.ArrayBuffer[Int]()
+        for (_ <- 0 until 32) {
+          resultBytes += qspiReadByte(dut)
+        }
+
+        dut.clockDomain.waitSampling(4)
+        dut.io.cs_n #= true
+        dut.clockDomain.waitSampling(5)
+
+        val gotSharedHex = bytesToHex(resultBytes.toSeq)
+        assert(
+          gotSharedHex == c.expectedSharedHex,
+          s"${c.name}: QSPI shared secret mismatch:\n  got:  $gotSharedHex\n  want: ${c.expectedSharedHex}"
+        )
+
+        // 4. Clear interrupt
+        qspiSendCommand(dut, QspiOpcode.OP_IRQ_CLEAR)
+        dut.clockDomain.waitSampling(5)
+        assert(dut.io.irq_n.toBoolean, s"${c.name}: irq_n should return high after OP_IRQ_CLEAR")
       }
     }
   }

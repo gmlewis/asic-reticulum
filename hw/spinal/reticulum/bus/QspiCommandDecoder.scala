@@ -9,6 +9,8 @@ object QspiOpcode {
   val OP_IRQ_CLEAR   = 0x03
   val OP_STAMP_GRIND = 0x10
   val OP_STAMP_READ  = 0x11
+  val OP_X25519_MULT = 0x20
+  val OP_X25519_READ = 0x21
 }
 
 /**
@@ -42,10 +44,22 @@ case class QspiCommandDecoderIo() extends Bundle {
   val stampWinningZeros     = in UInt(8 bits)
   val stampWinningNonce     = in UInt(64 bits)
   val stampRoundsEvaluated  = in UInt(64 bits)
+
+  // Control & Status lines to/from X25519Ladder
+  val x25519Start    = out Bool()
+  val x25519Abort    = out Bool()
+  val x25519IrqClear = out Bool()
+  val x25519Scalar   = out Bits(256 bits)
+  val x25519UCoord   = out Bits(256 bits)
+
+  val x25519Busy   = in Bool()
+  val x25519Done   = in Bool()
+  val x25519Irq    = in Bool()
+  val x25519Result = in Bits(256 bits)
 }
 
 object DecoderState extends SpinalEnum {
-  val IDLE, LEN_MSB, LEN_LSB, RX_STAMP_PAYLOAD, RX_DISCARD, TX_STATUS, TX_STAMP_RESULT = newElement()
+  val IDLE, LEN_MSB, LEN_LSB, RX_STAMP_PAYLOAD, RX_X25519_PAYLOAD, RX_DISCARD, TX_STATUS, TX_STAMP_RESULT, TX_X25519_RESULT = newElement()
 }
 
 /**
@@ -77,10 +91,21 @@ case class QspiCommandDecoder() extends Component {
   val regStampAbort    = RegInit(False)
   val regStampIrqClear = RegInit(False)
 
+  // X25519 latched configuration registers
+  val cfgScalar        = Reg(Bits(256 bits)) init (0)
+  val cfgUCoord        = Reg(Bits(256 bits)) init (0)
+  val regX25519Start   = RegInit(False)
+  val regX25519Abort   = RegInit(False)
+  val regX25519IrqClear = RegInit(False)
+  val snapX25519Result = Reg(Bits(256 bits)) init (0)
+
   // Status buffer for reading
   val statusBytes = Vec(Bits(8 bits), 4)
   val statusFlagByte = Cat(
-    B(0, 4 bits),
+    B(0, 1 bit),
+    io.x25519Irq,
+    io.x25519Busy,
+    io.x25519Done,
     io.stampIrq,
     io.stampBusy,
     io.stampMeetsTarget,
@@ -91,7 +116,7 @@ case class QspiCommandDecoder() extends Component {
   statusBytes(2) := io.stampRoundsEvaluated(15 downto 8).asBits
   statusBytes(3) := io.stampRoundsEvaluated(7 downto 0).asBits
 
-  // Snapshot of winning results for transmission
+  // Snapshot of winning stamp results for transmission
   val snapStatus       = Reg(Bits(8 bits))
   val snapZeros        = Reg(UInt(8 bits))
   val snapNonce        = Reg(UInt(64 bits))
@@ -137,18 +162,36 @@ case class QspiCommandDecoder() extends Component {
     b
   }
 
+  def getX25519ResultByte(idx: UInt): Bits = {
+    val b = Bits(8 bits)
+    switch(idx) {
+      for (i <- 0 until 32) {
+        is(i) {
+          val lsb = i * 8
+          val msb = lsb + 7
+          b := snapX25519Result(msb downto lsb)
+        }
+      }
+      default { b := B(0, 8 bits) }
+    }
+    b
+  }
+
   // Stream defaults
   io.rx.ready := False
   io.tx.valid := False
   io.tx.payload := B(0, 8 bits)
 
-  val isTxState = (state === DecoderState.TX_STATUS) || (state === DecoderState.TX_STAMP_RESULT)
+  val isTxState = (state === DecoderState.TX_STATUS) || (state === DecoderState.TX_STAMP_RESULT) || (state === DecoderState.TX_X25519_RESULT)
   io.txEnable := isTxState
 
   // Pulses reset automatically
-  regStampStart    := False
-  regStampAbort    := False
-  regStampIrqClear := False
+  regStampStart     := False
+  regStampAbort     := False
+  regStampIrqClear  := False
+  regX25519Start    := False
+  regX25519Abort    := False
+  regX25519IrqClear := False
 
   switch(state) {
     is(DecoderState.IDLE) {
@@ -181,15 +224,17 @@ case class QspiCommandDecoder() extends Component {
               state := DecoderState.TX_STATUS
             }
             is(QspiOpcode.OP_ABORT) {
-              regStampAbort := True
-              state         := DecoderState.IDLE
+              regStampAbort  := True
+              regX25519Abort := True
+              state          := DecoderState.IDLE
             }
             is(QspiOpcode.OP_IRQ_CLEAR) {
-              regStampIrqClear := True
-              state            := DecoderState.IDLE
+              regStampIrqClear  := True
+              regX25519IrqClear := True
+              state             := DecoderState.IDLE
             }
             is(QspiOpcode.OP_STAMP_READ) {
-              // Latch snapshot of current results
+              // Latch snapshot of current stamp results
               snapStatus    := statusFlagByte
               snapZeros     := io.stampWinningZeros
               snapNonce     := io.stampWinningNonce
@@ -197,6 +242,11 @@ case class QspiCommandDecoder() extends Component {
               snapDigest    := io.stampWinningDigest
               snapCandidate := io.stampWinningCandidate
               state         := DecoderState.TX_STAMP_RESULT
+            }
+            is(QspiOpcode.OP_X25519_READ) {
+              // Latch snapshot of current X25519 result
+              snapX25519Result := io.x25519Result
+              state            := DecoderState.TX_X25519_RESULT
             }
             default {
               state := DecoderState.IDLE
@@ -207,6 +257,9 @@ case class QspiCommandDecoder() extends Component {
             is(QspiOpcode.OP_STAMP_GRIND) {
               state := DecoderState.RX_STAMP_PAYLOAD
             }
+            is(QspiOpcode.OP_X25519_MULT) {
+              state := DecoderState.RX_X25519_PAYLOAD
+            }
             default {
               state := DecoderState.RX_DISCARD
             }
@@ -216,12 +269,6 @@ case class QspiCommandDecoder() extends Component {
     }
 
     // RX Stamp payload: 89 bytes
-    // [0]: targetCost (1B)
-    // [1..32]: midstate (32B)
-    // [33..64]: baseCandidate (32B)
-    // [65..72]: totalLengthBits (8B)
-    // [73..80]: startNonce (8B)
-    // [81..88]: maxRounds (8B)
     is(DecoderState.RX_STAMP_PAYLOAD) {
       io.rx.ready := True
       when(io.rx.valid) {
@@ -285,6 +332,41 @@ case class QspiCommandDecoder() extends Component {
       }
     }
 
+    // RX X25519 payload: 64 bytes (32B scalar + 32B u-coord in little-endian order)
+    is(DecoderState.RX_X25519_PAYLOAD) {
+      io.rx.ready := True
+      when(io.rx.valid) {
+        val b = io.rx.payload
+        when(byteIndex <= 31) {
+          val offset = byteIndex.resize(8 bits)
+          for (i <- 0 until 32) {
+            when(offset === i) {
+              val lsb = i * 8
+              val msb = lsb + 7
+              cfgScalar(msb downto lsb) := b
+            }
+          }
+        } elsewhen(byteIndex >= 32 && byteIndex <= 63) {
+          val offset = (byteIndex - 32).resize(8 bits)
+          for (i <- 0 until 32) {
+            when(offset === i) {
+              val lsb = i * 8
+              val msb = lsb + 7
+              cfgUCoord(msb downto lsb) := b
+            }
+          }
+        }
+
+        byteIndex      := byteIndex + 1
+        bytesRemaining := bytesRemaining - 1
+
+        when(bytesRemaining === 1) {
+          regX25519Start := True
+          state          := DecoderState.IDLE
+        }
+      }
+    }
+
     is(DecoderState.RX_DISCARD) {
       io.rx.ready := True
       when(io.rx.valid) {
@@ -314,6 +396,16 @@ case class QspiCommandDecoder() extends Component {
         }
       }
     }
+
+    is(DecoderState.TX_X25519_RESULT) {
+      when(byteIndex < 32) {
+        io.tx.valid   := True
+        io.tx.payload := getX25519ResultByte(byteIndex)
+        when(io.tx.ready) {
+          byteIndex := byteIndex + 1
+        }
+      }
+    }
   }
 
   // Reset to IDLE whenever Chip Select deasserts
@@ -331,4 +423,11 @@ case class QspiCommandDecoder() extends Component {
   io.stampTotalLengthBits := cfgTotalLengthBits
   io.stampStartNonce      := cfgStartNonce
   io.stampMaxRounds       := cfgMaxRounds
+
+  // Connect outputs to X25519Ladder
+  io.x25519Start    := regX25519Start
+  io.x25519Abort    := regX25519Abort
+  io.x25519IrqClear := regX25519IrqClear
+  io.x25519Scalar   := cfgScalar
+  io.x25519UCoord   := cfgUCoord
 }

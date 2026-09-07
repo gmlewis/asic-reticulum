@@ -1,6 +1,6 @@
 package reticulum.bus
 
-import reticulum.crypto.Stamper
+import reticulum.crypto.{Stamper, X25519Ladder}
 import spinal.core._
 import spinal.lib._
 
@@ -30,6 +30,7 @@ case class QspiTopIo() extends Bundle {
  *  1. 4-bit Quad-SPI Slave transceiver (QspiSlave).
  *  2. Command Decoder FSM (QspiCommandDecoder).
  *  3. Autonomous IFAC Hashcash Stamp Grinder (Stamper).
+ *  4. Constant-time X25519 Montgomery Ladder Engine (X25519Ladder).
  *
  * Provides a 7-pin physical interface to host microcontrollers (e.g. ESP32-C5 GDMA):
  *  - High-speed 4-bit streaming at 20-40 MB/s wire speed.
@@ -41,6 +42,7 @@ case class QspiTop(roundsPerStage: Int = 1) extends Component {
   val slave   = QspiSlave()
   val decoder = QspiCommandDecoder()
   val stamper = Stamper(roundsPerStage = roundsPerStage)
+  val x25519  = X25519Ladder()
 
   // -------------------------------------------------------------------------
   // Physical Pad Connections
@@ -53,8 +55,8 @@ case class QspiTop(roundsPerStage: Int = 1) extends Component {
 
   decoder.io.cs_n := io.cs_n
 
-  // Dedicated active-low interrupt to host
-  io.irq_n := !stamper.io.irq
+  // Dedicated active-low interrupt to host (asserts if Stamper OR X25519 asserts IRQ)
+  io.irq_n := !(stamper.io.irq || x25519.io.irq)
 
   // -------------------------------------------------------------------------
   // QSPI Slave <-> Command Decoder Interconnect
@@ -85,6 +87,20 @@ case class QspiTop(roundsPerStage: Int = 1) extends Component {
   decoder.io.stampWinningZeros     := stamper.io.winningZeros
   decoder.io.stampWinningNonce     := stamper.io.winningNonce
   decoder.io.stampRoundsEvaluated  := stamper.io.roundsEvaluated
+
+  // -------------------------------------------------------------------------
+  // Command Decoder <-> X25519 Interconnect
+  // -------------------------------------------------------------------------
+  x25519.io.start    := decoder.io.x25519Start
+  x25519.io.abort    := decoder.io.x25519Abort
+  x25519.io.irqClear := decoder.io.x25519IrqClear
+  x25519.io.scalar   := decoder.io.x25519Scalar
+  x25519.io.uCoord   := decoder.io.x25519UCoord
+
+  decoder.io.x25519Busy   := x25519.io.busy
+  decoder.io.x25519Done   := x25519.io.done
+  decoder.io.x25519Irq    := x25519.io.irq
+  decoder.io.x25519Result := x25519.io.result
 }
 
 /**
@@ -99,7 +115,5 @@ object QspiTopVerilog extends App {
       resetActiveLevel = HIGH
     )
   )
-
-  config.generateVerilog(QspiTop()).printPruned()
-  println("Successfully generated Verilog in hw/gen/QspiTop.v")
+  config.generateVerilog(QspiTop(roundsPerStage = 1))
 }

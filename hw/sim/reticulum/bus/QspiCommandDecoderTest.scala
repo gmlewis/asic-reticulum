@@ -22,23 +22,38 @@ class QspiCommandDecoderTest extends AnyFunSuite {
     dut.io.rx.valid #= false
   }
 
+  def initInputs(dut: QspiCommandDecoder): Unit = {
+    dut.io.cs_n #= false
+    dut.io.rx.valid #= false
+    dut.io.rx.payload #= 0
+    dut.io.tx.ready #= true
+
+    dut.io.stampBusy #= false
+    dut.io.stampDone #= false
+    dut.io.stampMeetsTarget #= false
+    dut.io.stampIrq #= false
+    dut.io.stampWinningZeros #= 0
+    dut.io.stampWinningNonce #= 0L
+    dut.io.stampRoundsEvaluated #= 0L
+    dut.io.stampWinningDigest #= 0
+    dut.io.stampWinningCandidate #= 0
+
+    dut.io.x25519Busy #= false
+    dut.io.x25519Done #= false
+    dut.io.x25519Irq #= false
+    dut.io.x25519Result #= 0
+  }
+
   test("QspiCommandDecoder: OP_STATUS read") {
     SimConfig.compile(QspiCommandDecoder()).doSim { dut =>
       dut.clockDomain.forkStimulus(period = 10)
-      dut.io.cs_n #= false
-      dut.io.rx.valid #= false
-      dut.io.rx.payload #= 0
-      dut.io.tx.ready #= true
+      initInputs(dut)
 
       dut.io.stampBusy #= false
       dut.io.stampDone #= true
       dut.io.stampMeetsTarget #= true
       dut.io.stampIrq #= true
-      dut.io.stampWinningZeros #= 3
-      dut.io.stampWinningNonce #= 42L
       dut.io.stampRoundsEvaluated #= 0x1234L
-      dut.io.stampWinningDigest #= 0
-      dut.io.stampWinningCandidate #= 0
       dut.clockDomain.waitSampling(5)
 
       // Send OP_STATUS with length 0
@@ -55,7 +70,8 @@ class QspiCommandDecoderTest extends AnyFunSuite {
       }
 
       // Expected:
-      // Byte 0: status flag (irq=1, busy=0, meetsTarget=1, done=1) -> 0b0000_1011 = 0x0B
+      // Byte 0: status flag (x25519Irq=0, x25519Busy=0, x25519Done=0, stampIrq=1, stampBusy=0, stampMeetsTarget=1, stampDone=1)
+      //         -> 0b0000_1011 = 0x0B
       // Byte 1: 0x10 (version 1.0)
       // Byte 2: rounds high byte 0x12
       // Byte 3: rounds low byte 0x34
@@ -66,76 +82,56 @@ class QspiCommandDecoderTest extends AnyFunSuite {
   test("QspiCommandDecoder: OP_ABORT and OP_IRQ_CLEAR pulses") {
     SimConfig.compile(QspiCommandDecoder()).doSim { dut =>
       dut.clockDomain.forkStimulus(period = 10)
-      dut.io.cs_n #= false
-      dut.io.rx.valid #= false
-      dut.io.rx.payload #= 0
+      initInputs(dut)
       dut.io.tx.ready #= false
       dut.io.stampBusy #= true
-      dut.io.stampDone #= false
-      dut.io.stampMeetsTarget #= false
       dut.io.stampIrq #= true
-      dut.io.stampWinningZeros #= 0
-      dut.io.stampWinningNonce #= 0L
-      dut.io.stampRoundsEvaluated #= 0L
-      dut.io.stampWinningDigest #= 0
-      dut.io.stampWinningCandidate #= 0
+      dut.io.x25519Busy #= true
+      dut.io.x25519Irq #= true
       dut.clockDomain.waitSampling(5)
 
       // Send OP_ABORT
       var abortSeen = false
+      var x25519AbortSeen = false
       fork {
         for (_ <- 0 until 20) {
           if (dut.io.stampAbort.toBoolean) abortSeen = true
+          if (dut.io.x25519Abort.toBoolean) x25519AbortSeen = true
           dut.clockDomain.waitSampling()
         }
       }
       sendCommand(dut, QspiOpcode.OP_ABORT, Seq())
       dut.clockDomain.waitSampling(5)
       assert(abortSeen, "stampAbort was not pulsed on OP_ABORT")
+      assert(x25519AbortSeen, "x25519Abort was not pulsed on OP_ABORT")
 
       // Send OP_IRQ_CLEAR
       var irqClearSeen = false
+      var x25519IrqClearSeen = false
       fork {
         for (_ <- 0 until 20) {
           if (dut.io.stampIrqClear.toBoolean) irqClearSeen = true
+          if (dut.io.x25519IrqClear.toBoolean) x25519IrqClearSeen = true
           dut.clockDomain.waitSampling()
         }
       }
       sendCommand(dut, QspiOpcode.OP_IRQ_CLEAR, Seq())
       dut.clockDomain.waitSampling(5)
       assert(irqClearSeen, "stampIrqClear was not pulsed on OP_IRQ_CLEAR")
+      assert(x25519IrqClearSeen, "x25519IrqClear was not pulsed on OP_IRQ_CLEAR")
     }
   }
 
   test("QspiCommandDecoder: OP_STAMP_GRIND parameter reception & start pulse") {
     SimConfig.compile(QspiCommandDecoder()).doSim { dut =>
       dut.clockDomain.forkStimulus(period = 10)
-      dut.io.cs_n #= false
-      dut.io.rx.valid #= false
-      dut.io.rx.payload #= 0
-      dut.io.tx.ready #= false
-      dut.io.stampBusy #= false
-      dut.io.stampDone #= false
-      dut.io.stampMeetsTarget #= false
-      dut.io.stampIrq #= false
-      dut.io.stampWinningZeros #= 0
-      dut.io.stampWinningNonce #= 0L
-      dut.io.stampRoundsEvaluated #= 0L
-      dut.io.stampWinningDigest #= 0
-      dut.io.stampWinningCandidate #= 0
+      initInputs(dut)
       dut.clockDomain.waitSampling(5)
 
-      // Form 89-byte payload:
-      // targetCost = 5 (1B)
-      // midstate = 32 bytes (0x11, 0x12, ...)
-      // baseCandidate = 32 bytes (0x21, 0x22, ...)
-      // totalLengthBits = 0x0000000000000200 (8B)
-      // startNonce = 0x000000000000000A (8B)
-      // maxRounds = 0x0000000000000064 (8B, 100 rounds)
       val targetCost = 5
-      val midstateBytes = (0 until 32).map(i => (0x10 + i) & 0xFF)
-      val baseCandBytes = (0 until 32).map(i => (0x40 + i) & 0xFF)
-      val totalLenBytes = Seq(0, 0, 0, 0, 0, 0, 2, 0)
+      val midstateBytes = (0 until 32).map(i => i + 1)
+      val baseCandBytes = (0 until 32).map(i => 0x55)
+      val totalLenBytes = Seq(0, 0, 0, 0, 0, 0, 2, 0) // 0x200 = 512 bits
       val startNonceBytes = Seq(0, 0, 0, 0, 0, 0, 0, 10)
       val maxRoundsBytes = Seq(0, 0, 0, 0, 0, 0, 0, 100)
 
@@ -164,10 +160,7 @@ class QspiCommandDecoderTest extends AnyFunSuite {
   test("QspiCommandDecoder: OP_STAMP_READ response streaming (82 bytes)") {
     SimConfig.compile(QspiCommandDecoder()).doSim { dut =>
       dut.clockDomain.forkStimulus(period = 10)
-      dut.io.cs_n #= false
-      dut.io.rx.valid #= false
-      dut.io.rx.payload #= 0
-      dut.io.tx.ready #= true
+      initInputs(dut)
 
       dut.io.stampBusy #= false
       dut.io.stampDone #= true
@@ -204,6 +197,63 @@ class QspiCommandDecoderTest extends AnyFunSuite {
       // Bytes 10..17: rounds evaluated 0x0102030405060708
       val gotRounds = received.slice(10, 18).foldLeft(0L)((acc, b) => (acc << 8) | b)
       assert(gotRounds == 0x0102030405060708L, f"Rounds mismatch: got 0x$gotRounds%x")
+    }
+  }
+
+  test("QspiCommandDecoder: OP_X25519_MULT parameter reception & start pulse (64 bytes)") {
+    SimConfig.compile(QspiCommandDecoder()).doSim { dut =>
+      dut.clockDomain.forkStimulus(period = 10)
+      initInputs(dut)
+      dut.clockDomain.waitSampling(5)
+
+      val scalarBytes = (0 until 32).map(i => i + 0x10)
+      val uCoordBytes = (0 until 32).map(i => i + 0x50)
+      val payload = scalarBytes ++ uCoordBytes
+      assert(payload.length == 64)
+
+      var startSeen = false
+      fork {
+        for (_ <- 0 until 150) {
+          if (dut.io.x25519Start.toBoolean) startSeen = true
+          dut.clockDomain.waitSampling()
+        }
+      }
+
+      sendCommand(dut, QspiOpcode.OP_X25519_MULT, payload)
+      dut.clockDomain.waitSampling(5)
+
+      assert(startSeen, "x25519Start was not pulsed on OP_X25519_MULT")
+    }
+  }
+
+  test("QspiCommandDecoder: OP_X25519_READ response streaming (32 bytes)") {
+    SimConfig.compile(QspiCommandDecoder()).doSim { dut =>
+      dut.clockDomain.forkStimulus(period = 10)
+      initInputs(dut)
+
+      val expResultBytes = (0 until 32).map(i => (i * 7) & 0xFF)
+      var expResultBigInt = BigInt(0)
+      for (i <- 0 until 32) {
+        expResultBigInt |= (BigInt(expResultBytes(i)) << (i * 8))
+      }
+      dut.io.x25519Result #= expResultBigInt
+      dut.clockDomain.waitSampling(5)
+
+      // Send OP_X25519_READ with length 0
+      sendCommand(dut, QspiOpcode.OP_X25519_READ, Seq())
+
+      // Collect 32 result bytes
+      val received = collection.mutable.ArrayBuffer[Int]()
+      for (_ <- 0 until 32) {
+        while (!dut.io.tx.valid.toBoolean) {
+          dut.clockDomain.waitSampling()
+        }
+        received += dut.io.tx.payload.toInt
+        dut.clockDomain.waitSampling()
+      }
+
+      assert(received.length == 32)
+      assert(received.toSeq == expResultBytes, s"X25519 result mismatch: got $received, expected $expResultBytes")
     }
   }
 }
