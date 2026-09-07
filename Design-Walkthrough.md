@@ -2552,3 +2552,105 @@ The hardware files are formatted to allow 1-click ordering from **both PCBWay an
    - Cross-check that every component footprint has active stock on both LCSC (for JLCPCB) and DigiKey/Mouser (for PCBWay).
 4. **Mechanical Standoff Alignment**:
    - Confirm mounting hole coordinates match Raspberry Pi HAT mechanical standards ($58.0\text{ mm} \times 49.0\text{ mm}$ rectangular pattern, $M2.5$ screw holes).
+
+---
+
+# Universal Reticulum Hat & Carrier PCB: Phase 2 Implementation Plan (Layout & Fabrication)
+
+## Goal Description
+
+Phase 2 transitions the verified schematic architecture into a complete physical printed circuit board layout in `asic-reticulum/hw/pcb/reticulum-hat/reticulum-hat.kicad_pcb`.
+
+The board will be routed as a 2-layer, high-reliability FR-4 PCB ($65.0\text{ mm} \times 56.0\text{ mm}$, 1.6mm thickness, 1 oz Cu, ENIG finish) adhering strictly to Raspberry Pi HAT mechanical guidelines. It integrates the 50-ohm coplanar waveguide for the SX1262 LoRa radio, dual-host component placement (Raspberry Pi stacking header + ESP32-C5 / Heltec V4 socket), crypto accelerator socket, ST7789 display and CardKB keyboard interfaces, and automatic LiPo power-path circuitry.
+
+---
+
+## Recommended Tools for Analysis, Verification, and Testing
+
+To inspect, verify, simulate, and test these designs on macOS, the following tools are recommended:
+
+### 1. PCB Design & Inspection
+- **KiCad 8 (`brew install --cask kicad`)**: Full EDA suite (Eeschema, Pcbnew, 3D viewer) and `kicad-cli` (headless DRC, ERC, Gerber, and PDF export).
+- **Gerbv (`brew install gerbv`)**: Fast, standalone Gerber and drill file viewer for independent multi-layer visual fabrication checks.
+- **InteractiveHtmlBom (`python3 -m pip install InteractiveHtmlBom`)**: Generates dynamic, searchable HTML visual assembly guides showing exact component locations, pin 1 markers, and orientations.
+
+### 2. Circuit & Power Simulation
+- **ngspice (`brew install ngspice`)**: SPICE engine for transient analysis of the DMG2305UX MOSFET auto-switching power path (<10 µs battery-to-USB switchover), TP4056 charge profile, and ST7789 PWM backlight driver.
+
+### 3. FPGA & Firmware Bring-Up (Form Factor B & Tang Primer 25K)
+- **openFPGALoader (`brew install openfpgaloader`)**: Open-source, vendor-independent programmer that flashes bitstreams directly to the Gowin Tang Primer 25K (GW5A) over USB without proprietary drivers.
+- **esptool (`python3 -m pip install esptool`)**: Flashing and ROM inspection utility for ESP32-C5 and Heltec V4.
+- **tio (`brew install tio`)**: Modern serial terminal with auto-reconnect, hex dump, and timestamping for logging UART debug streams.
+
+---
+
+## Technical Specifications & Design Rules
+
+- **PCB Layer Count & RF Integrity**: 2-layer PCB using Coplanar Waveguide with Ground (CPWG) for the 50-ohm RF LoRa feedline.
+- **RF Antenna Placement**: The edge-mount SMA jack is positioned on the top edge with ground via stitching to isolate high-frequency 868/915 MHz RF from the high-speed QSPI clock (40–80 MHz) on the crypto socket.
+- **Display Mount Options**: Dual footprint support is included: standard 8-pin 2.54mm female header (for off-the-shelf breakout boards) plus a 14-pin 0.5mm bottom-contact FPC connector (for ultra-slim integrated handheld assembly).
+
+---
+
+## Deliverables
+
+### `asic-reticulum/hw/pcb/reticulum-hat/`
+
+#### `reticulum-hat.kicad_pcb`
+- **Board Outline**: $65.0\text{ mm} \times 56.0\text{ mm}$ rectangular boundary with $3.5\text{ mm}$ rounded corners on Edge.Cuts layer.
+- **Mounting Holes**: 4 $\times$ $M2.5$ unplated mounting holes with $5.0\text{ mm}$ keepout rings at $(3.5, 3.5)$, $(61.5, 3.5)$, $(3.5, 52.5)$, $(61.5, 52.5)\text{ mm}$ (exact Pi HAT specification).
+- **50-Ohm Coplanar Waveguide (CPWG)**:
+  - Calculated parameters for standard FR-4 ($\epsilon_r = 4.5, h = 1.6\text{ mm}, t = 35\ \mu\text{m}$):
+    - Trace width $W = 0.75\text{ mm}$ (~30 mil)
+    - Ground clearance gap $S = 0.35\text{ mm}$ (~14 mil)
+    - Double row of $0.3\text{ mm}$ drill ground stitching vias spaced every $1.5\text{ mm}$.
+- **Component Floorplan**:
+  - **Top Edge**: Edge-mount SMA female connector and u.FL socket.
+  - **Left Edge**: USB-C receptacle, TP4056 charger, LiPo JST-PH battery jack, and power switch.
+  - **Bottom Edge**: $2\times 20$ Raspberry Pi 40-pin female stacking header (`J_PI`).
+  - **Center-Top**: EBYTE E22-900M22S castellated SMD LoRa module.
+  - **Center**: Dual $1\times 22$ female socket headers for ESP32-C5 / Heltec V4 daughterboard, with the ST7789 display mounting directly above or beside.
+  - **Right Edge**: 10-pin ($2\times 5$) Crypto Accelerator Socket (`J_CRYPTO`) and STEMMA QT 4-pin I2C keyboard port.
+  - **Center-Lower**: 19 $\times$ 3-pin jumper field (`JP1`..`JP19`) for routing selection.
+- **Power & Ground Planes**:
+  - Layer 2 (Bottom): Solid contiguous Ground Plane (`GND`).
+  - Layer 1 (Top): Ground copper pour with thermal relief on grounded pads. Dedicated $0.8\text{ mm}$ ($32\text{ mil}$) power traces for `VBUS`, `VBAT`, and `+3.3V`.
+
+#### `gerbers/`
+- Automated generation of production Gerber RS-274X and Excellon NC drill files:
+  - `F_Cu.gbr` (Top copper), `B_Cu.gbr` (Bottom copper)
+  - `F_Mask.gbr` (Top solder mask), `B_Mask.gbr` (Bottom solder mask)
+  - `F_Silkscreen.gbr` (Top silkscreen), `B_Silkscreen.gbr` (Bottom silkscreen)
+  - `Edge_Cuts.gbr` (Board outline and cutouts)
+  - `reticulum-hat.drl` (Plated and unplated drills)
+  - Compressed zip archive `Gerber_Universal_Reticulum_Hat_v1.0.zip` ready for 1-click upload to PCBWay and JLCPCB.
+
+#### `cpl/centroid.csv`
+- Component Placement List with exact X/Y coordinates, layer, and rotation angles for automated SMT pick-and-place assembly.
+
+#### `sim/power_path_sim.cir`
+- ngspice SPICE simulation netlist validating the DMG2305UX / BAT54C automatic power path transition time and voltage droop under a 500mA dynamic load step.
+
+---
+
+## Verification Plan
+
+### 1. Design Rules & Electrical Checks
+- Run KiCad Design Rules Check (DRC):
+  - 0 clearance violations ($> 0.15\text{ mm}$ / 6 mil trace/space).
+  - 0 track width violations ($> 0.15\text{ mm}$, $0.75\text{ mm}$ for RF CPWG, $> 0.5\text{ mm}$ for power).
+  - 0 unrouted nets.
+- Verify 100% netlist parity against `reticulum-hat.kicad_sch`.
+
+### 2. RF Transmission Line Verification
+- Calculate characteristic impedance $Z_0$ of the LoRa antenna trace using Coplanar Waveguide with Ground formulas:
+  - Target: $50.0\ \Omega \pm 2\ \Omega$.
+  - Verify ground plane clearance and via stitching spacing ($<\lambda/10$ at 915 MHz, $\lambda \approx 160\text{ mm}$ in FR-4, spacing $1.5\text{ mm} \ll 16\text{ mm}$).
+
+### 3. Fabrication & Assembly Validation
+- Independent inspection of generated Gerbers in `gerbv` or online Gerber viewer:
+  - Solder mask expansion ($0.05\text{ mm}$).
+  - Silkscreen clearance over pads (no text on exposed copper).
+  - Edge cut dimension check ($65.0\text{ mm} \times 56.0\text{ mm}$).
+- Validate `BOM.csv` and `centroid.csv` syntax against JLCPCB and PCBWay SMT quotation parsers.
+

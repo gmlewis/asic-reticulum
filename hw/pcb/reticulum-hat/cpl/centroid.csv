@@ -1,0 +1,13 @@
+Designator,Val,Package,Mid X,Mid Y,Rotation,Layer
+J_SMA,SMA_Edge_Mount,Connector_Coaxial:SMA_Amphenol_132136_EdgeMount,132.500,100.000,180.0,Top
+U_LORA,E22-900M22S,Module:EBYTE_E22-900M22S,132.500,116.000,0.0,Top
+J_PI,Raspberry_Pi_40Pin,Connector_PinHeader_2.54mm:PinHeader_2x20_P2.54mm_Vertical,132.500,152.000,0.0,Top
+J_MCU_L,Socket_1x22,Connector_PinSocket_2.54mm:PinSocket_1x22_P2.54mm_Vertical,115.000,133.000,90.0,Top
+J_MCU_R,Socket_1x22,Connector_PinSocket_2.54mm:PinSocket_1x22_P2.54mm_Vertical,137.860,133.000,90.0,Top
+J_CRYPTO,Crypto_QSPI_IRQ,Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical,157.000,125.000,0.0,Top
+J_USB,USB-C-16P-SMD,Connector_USB:USB_C_Receptacle_GCT_USB4105,100.500,120.000,90.0,Top
+J_BAT,LiPo_Battery,Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical,103.500,135.000,90.0,Top
+U_REG,AP2112K-3.3,Package_TO_SOT_SMD:SOT-23-5,106.000,115.000,0.0,Top
+U_CHG,TP4056,Package_SO:SOIC-8_3.9x4.9mm_P1.27mm,106.000,126.000,0.0,Top
+Q_PWR,DMG2305UX,Package_TO_SOT_SMD:SOT-23,109.000,120.000,0.0,Top
+J_STEMMA,STEMMA_QT_CardKB,Connector_JST:JST_SH_SM04B-SRSS-TB_1x04-1MP_P1.00mm_Horizontal,160.000,142.000,270.0,Top
