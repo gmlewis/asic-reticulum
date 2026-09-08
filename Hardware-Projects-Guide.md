@@ -1,10 +1,18 @@
-# DIY Reticulum Hardware Projects: Complete Buyer, Assembly & Flashing Guide
+# DIY Reticulum Hardware Projects: Reference Design, Assembly & Flashing Guide
 
-Welcome to the **Reticulum Hardware Projects Guide**! This document provides everything you need to build, assemble, flash, and operate the three standalone off-grid hardware projects supported by [`go-reticulum`](https://github.com/gmlewis/go-reticulum) and [`go-nomadnet`](https://github.com/gmlewis/go-nomadnet), accelerated by the open-source silicon coprocessor in [`asic-reticulum`](https://github.com/gmlewis/asic-reticulum).
+Welcome to the **Reticulum Hardware Projects Guide**! This document provides theoretical reference architectures, design specifications, bills of materials (BOM), and proposed flashing workflows for three standalone off-grid hardware designs intended to be supported by [`go-reticulum`](https://github.com/gmlewis/go-reticulum) and [`go-nomadnet`](https://github.com/gmlewis/go-nomadnet), accelerated by the open-source silicon coprocessor in [`asic-reticulum`](https://github.com/gmlewis/asic-reticulum).
+
+> [!IMPORTANT]
+> ### CURRENT STATUS: THEORETICAL & HYPOTHETICAL DESIGNS (UNTESTED ON PHYSICAL HARDWARE)
+> **Please note**: All hardware projects, carrier board schematics, bills of materials (BOM), mechanical integrations, and flashing workflows described in this document are **currently purely theoretical and hypothetical**. They have **not yet been physically assembled, built, or tested on physical hardware**.
+>
+> While software binaries and firmware targets have been cross-compiled and verified in software unit tests and simulation environments, physical device bring-up, real-world RF performance, power rail stability, and component interoperability have not yet been validated on real devices.
+>
+> Each project section below includes a dedicated **Tested Devices & Configurations** status block (currently all **TBD**).
 
 > [!NOTE]
 > **No compiler toolchains, Python scripts, or source code cloning required!**
-> Every executable and firmware artifact referenced in this guide is pre-compiled and downloadable directly from GitHub Releases.
+> Every prospective executable and firmware artifact referenced in this guide is pre-compiled and downloadable directly from GitHub Releases.
 > For microcontrollers (ESP32-C5 in Projects 2 and 3), you can flash firmware **directly from your web browser** with zero installation using in-browser Web Serial tools like [ESPConnect](https://thelastoutpostworkshop.github.io/ESPConnect/) or the [Espressif Web Flasher](https://espressif.github.io/esptool-js/).
 
 ---
@@ -19,17 +27,20 @@ Welcome to the **Reticulum Hardware Projects Guide**! This document provides eve
   - [Files to Download from GitHub](#2-files-to-download-from-github)
   - [Hardware Assembly Step-by-Step](#3-hardware-assembly-step-by-step)
   - [Flashing & Software Configuration](#4-flashing--software-configuration)
+  - [Tested Devices & Configurations](#5-tested-devices--configurations)
 - [Project 2: The Standalone Pocket Communicator (Form Factor B)](#project-2-the-standalone-pocket-communicator-form-factor-b)
   - [Hardware Bill of Materials (BOM)](#1-hardware-bill-of-materials-bom-1)
   - [Files to Download from GitHub](#2-files-to-download-from-github-1)
   - [Hardware Assembly & Pinout](#3-hardware-assembly--pinout)
   - [Flashing & First Boot](#4-flashing--first-boot)
+  - [Tested Devices & Configurations](#5-tested-devices--configurations-1)
 - [Project 3: The Autonomous Pocket Hub & Repeater (Form Factor C)](#project-3-the-autonomous-pocket-hub--repeater-form-factor-c)
   - [Hardware Bill of Materials (BOM)](#1-hardware-bill-of-materials-bom-2)
   - [Files to Download from GitHub](#2-files-to-download-from-github-2)
   - [Hardware Assembly](#3-hardware-assembly)
   - [Flashing & Initial Operation](#4-flashing--initial-operation)
   - [Connecting to the Hub via Wi-Fi AP](#5-connecting-to-the-hub-via-wi-fi-ap)
+  - [Tested Devices & Configurations](#6-tested-devices--configurations)
 - [RF Safety & Best Practices](#rf-safety--best-practices)
 - [Troubleshooting & FAQ](#troubleshooting--faq)
 
@@ -39,13 +50,14 @@ Welcome to the **Reticulum Hardware Projects Guide**! This document provides eve
 
 | Specification | Project 1: Pocket Linux Terminal | Project 2: Pocket Communicator | Project 3: Autonomous Pocket Hub |
 | :--- | :--- | :--- | :--- |
+| **Testing Status** | **Theoretical / Untested (TBD)** | **Theoretical / Untested (TBD)** | **Theoretical / Untested (TBD)** |
 | **Form Factor** | Form Factor A (`pocket_terminal`) | Form Factor B (`pocket_communicator`) | Form Factor C (`pocket_hub`) |
 | **Primary Host** | Raspberry Pi 3A+ / Zero 2W (or SBC) | ESP32-C5 RISC-V SoC | ESP32-C5 RISC-V SoC |
 | **Operating System** | Raspberry Pi OS Lite (64-bit Linux) | Bare-metal firmware / RTOS | Bare-metal firmware / RTOS |
 | **User Interface** | 2.8" Color TFT LCD + CardKB Keyboard | 2.8" Color TFT LCD + CardKB Keyboard | **Headless** (No LCD, No Keyboard) |
 | **Networking** | LoRa + Wi-Fi client + Bluetooth | LoRa + Wi-Fi 6 + Bluetooth | LoRa + Wi-Fi 6 SoftAP Repeater |
 | **Core Software** | Full `gonomadnet` TUI + `gorrcd` | Embedded `gonomadnet` / `gornsd` | Standalone **`gorrcd` daemon ONLY** |
-| **Typical Battery Life** | 4–6 hours (1500–2500 mAh LiPo) | 12–18 hours (1500–2500 mAh LiPo) | 24–48 hours (or indefinite on solar) |
+| **Estimated Battery Life** | 4–6 hours (theoretical estimate) | 12–18 hours (theoretical estimate) | 24–48 hours (theoretical estimate) |
 | **Hardware Crypto** | **Optional** (ASIC/FPGA offload, or pure-Go CPU software) | **Optional** (ASIC/FPGA offload, or MCU software) | **Optional** (ASIC/FPGA offload, or MCU software) |
 
 ---
@@ -80,7 +92,7 @@ You do not need KiCad installed to order boards. Use the pre-exported manufactur
 
 ## Project 1: The Pocket Linux Terminal (Form Factor A)
 
-The **Pocket Linux Terminal** is the ultimate handheld Reticulum computer. It boots a complete 64-bit Linux OS on a Raspberry Pi 3 Model A+ or Pi Zero 2W (or compatible Linux SBC), starts the `gorrcd` mesh chat daemon in the background, and displays the full interactive `gonomadnet` Terminal UI on a vibrant 2.8" color screen with physical thumb-typing.
+The **Pocket Linux Terminal** is a prospective handheld Reticulum computer architecture. It is designed to boot a complete 64-bit Linux OS on a Raspberry Pi 3 Model A+ or Pi Zero 2W (or compatible Linux SBC), run the `gorrcd` mesh chat daemon in the background, and display the full interactive `gonomadnet` Terminal UI on a 2.8" color screen with physical thumb-typing.
 
 ```
 +-------------------------------------------------------------+
@@ -233,18 +245,33 @@ dtoverlay=fbtft,spi0-0,st7789v,reset_pin=27,dc_pin=25,led_pin=18,rotate=90,speed
        spreading_factor = 7
        coding_rate = 5
    ```
-5. Test launch:
+5. Test launch (Proposed workflow):
    ```bash
    # Launch the full terminal UI on the framebuffer
    gonomadnet
    ```
-   You can now browse nodes, chat in local rooms, and communicate off-grid!
+   Once physically assembled and verified, this will enable browsing nodes, chatting in local rooms, and communicating off-grid.
+
+### 5. Tested Devices & Configurations
+
+> [!NOTE]
+> **Current Status: Theoretical / Hypothetical Design (Untested on Physical Hardware)**
+> This project has **not yet been physically assembled or tested on real hardware**. While software binaries have been cross-compiled and pass automated test suites, physical board bring-up, driver initialization, and hardware validation remain **TBD**.
+
+| Device / Configuration Element | Model / Target Specified | Physical Testing Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **SBC Host** | Raspberry Pi 3A+, Pi Zero 2W, Orange Pi Zero 2W, Milk-V Duo S | **TBD** | Binaries cross-compile cleanly; physical boot and driver load TBD |
+| **Carrier PCB** | Universal Reticulum Hat (`hw/pcb/reticulum-hat`) | **TBD** | Gerber files generated; physical board fab & assembly TBD |
+| **LoRa RF Interface** | EBYTE E22-900M22S (SX1262 SPI) | **TBD** | Linux `spidev` kernel overlay proposed; RF transmission TBD |
+| **Display Subsystem** | 2.8" SPI TFT LCD (ST7789 via fbtft) | **TBD** | Kernel framebuffer driver proposed; rendering TBD |
+| **Keyboard Subsystem** | M5Stack CardKB (I2C `0x5F`) | **TBD** | I2C key event reading proposed; physical typing TBD |
+| **Crypto Coprocessor** | Tiny Tapeout QSPI ASIC / Tang Primer 25K PMOD | **TBD** | Hardware offload untested; software pure-Go crypto verified |
 
 ---
 
 ## Project 2: The Standalone Pocket Communicator (Form Factor B)
 
-The **Standalone Pocket Communicator** runs an ultra-low-power embedded client directly on the **ESP32-C5** RISC-V SoC. It boots in less than 200 milliseconds, draws under 80 mA of current, and provides a clean messaging interface with physical keyboard and display without running a full Linux OS.
+The **Standalone Pocket Communicator** is a proposed ultra-low-power embedded client architecture designed to run directly on the **ESP32-C5** RISC-V SoC. It is targeted to boot in less than 200 milliseconds, draw under 80 mA of current, and provide a clean messaging interface with physical keyboard and display without running a full Linux OS.
 
 ```
 +-------------------------------------------------------------+
@@ -323,17 +350,32 @@ For terminal enthusiasts or headless environments:
    ```bash
    esptool.py --chip esp32c5 -p /dev/ttyUSB0 -b 921600 write_flash 0x0 pocket_communicator-esp32c5-firmware.bin
    ```
-4. Open the serial console to verify boot:
+4. Open the serial console to verify boot (Proposed workflow):
    ```bash
    tio /dev/ttyUSB0 -b 115200
    ```
-   The LCD displays the initialization screen, checks the SX1262 LoRa radio, and awaits keystrokes from the CardKB.
+   Upon successful boot, the LCD will display the initialization screen, check the SX1262 LoRa radio, and await keystrokes from the CardKB.
+
+### 5. Tested Devices & Configurations
+
+> [!NOTE]
+> **Current Status: Theoretical / Hypothetical Design (Untested on Physical Hardware)**
+> This project has **not yet been physically assembled or tested on real hardware**. All firmware build targets and pin mappings are theoretical specifications.
+
+| Device / Configuration Element | Model / Target Specified | Physical Testing Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **MCU Host** | ESP32-C5-DevKitC-1 (RISC-V) | **TBD** | Target firmware bundle specified; physical flashing and boot TBD |
+| **Carrier PCB** | Universal Reticulum Hat (Mode B) | **TBD** | Socket pinout proposed; physical power and bus routing TBD |
+| **LoRa RF Interface** | EBYTE E22-900M22S (SX1262 SPI) | **TBD** | Embedded SPI transceiver driver proposed; RF transmission TBD |
+| **Display Subsystem** | 2.8" SPI TFT LCD (ST7789) | **TBD** | Embedded graphics rendering proposed; physical display TBD |
+| **Keyboard Subsystem** | M5Stack CardKB (I2C `0x5F`) | **TBD** | Embedded I2C polling proposed; physical keystroke handling TBD |
+| **Power / Battery** | 1S 3.7V LiPo + TP4056 Charger | **TBD** | Power draw and battery longevity estimates are theoretical |
 
 ---
 
 ## Project 3: The Autonomous Pocket Hub & Repeater (Form Factor C)
 
-The **Autonomous Pocket Hub & Repeater** is a dedicated, self-contained mesh relay. It has **no keyboard and no display**—it runs standalone **`gorrcd`** on an ESP32-C5 with an SX1262 LoRa transceiver and a high-efficiency Wi-Fi 6 SoftAP. Place it on a roof, hilltop, or backpack, and any user within Wi-Fi or LoRa range can connect and communicate!
+The **Autonomous Pocket Hub & Repeater** is a proposed dedicated, self-contained mesh relay architecture. It has **no keyboard and no display**—it is designed to run the standalone **`gorrcd`** daemon on an ESP32-C5 with an SX1262 LoRa transceiver and a high-efficiency Wi-Fi 6 SoftAP. It is envisioned to be placed on a roof, hilltop, or backpack, allowing any user within Wi-Fi or LoRa range to connect and communicate.
 
 ```
 +-------------------------------------------------------------+
@@ -416,7 +458,21 @@ Any smartphone, laptop, or tablet can connect to the hub without an internet con
      target_host = 192.168.4.1
      target_port = 4242
    ```
-4. NomadNet will instantly connect! Open the **Channels** tab (`c` key) to join the hub's default room (`#general`) and begin chatting across the off-grid LoRa mesh!
+4. NomadNet will connect! Open the **Channels** tab (`c` key) to join the hub's default room (`#general`) and begin chatting across the off-grid LoRa mesh!
+
+### 6. Tested Devices & Configurations
+
+> [!NOTE]
+> **Current Status: Theoretical / Hypothetical Design (Untested on Physical Hardware)**
+> This project has **not yet been physically assembled or tested on real hardware**. While the standalone `gorrcd` daemon runs in Go test suites, operation on physical ESP32-C5 silicon and long-term autonomous power stability remain **TBD**.
+
+| Device / Configuration Element | Model / Target Specified | Physical Testing Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **MCU Host** | ESP32-C5-DevKitC-1 (RISC-V) | **TBD** | Standalone hub daemon target specified; physical boot TBD |
+| **Carrier PCB** | Universal Reticulum Hat (Mode B Headless) | **TBD** | Headless carrier proposed; physical verification TBD |
+| **LoRa RF Interface** | EBYTE E22-900M22S (SX1262 SPI) | **TBD** | Mesh packet relaying proposed; physical range/throughput TBD |
+| **Wi-Fi SoftAP Bridge** | ESP32-C5 802.11ax SoftAP | **TBD** | TCP client bridge proposed; multi-client wireless performance TBD |
+| **Solar / Battery System** | 18650 Li-Ion Cell + 5V Solar Panel | **TBD** | Autonomous runtime calculations are theoretical estimates |
 
 ---
 
