@@ -13,6 +13,11 @@ targeting open-source silicon flows (**Tiny Tapeout**, **OpenLane**, **SkyWater 
 
 For an exhaustive technical deep-dive into all design decisions, mathematical formulations, hardware pipelines, and verification results from Milestones 0 through 9, see [`Design-Walkthrough.md`](Design-Walkthrough.md).
 
+> [!WARNING]
+> ### ⚠️ Emergency, Hardware, and Safety Disclaimer
+> **NOT A CERTIFIED LIFE-SAFETY DEVICE · DIY HARDWARE & BATTERY HAZARDS.**
+> Hardware platforms and firmware described in this repository operate over unlicensed, best-effort radio frequencies and are **NOT** connected to official 911/112 emergency services, government rescue agencies, or COSPAS-SARSAT search-and-rescue satellites. DIY electronics assembly involving lithium-ion batteries carries inherent risks of thermal runaway, fire, and explosion. Operators are solely responsible for telecommunications regulatory compliance (FCC/ETSI). Users assume all risks of fabrication, testing, and deployment. Read [**DISCLAIMER.md**](DISCLAIMER.md) for the full legal terms and release of liability.
+
 > [!TIP]
 > ### Looking to build or flash the hardware devices?
 > Jump straight to the [**Reticulum Hardware Projects Guide**](https://github.com/gmlewis/asic-reticulum/tree/master/Hardware-Projects-Guide.md) for complete purchasing BOMs, step-by-step assembly, pre-built binary downloads, and zero-install in-browser web flashing for all three standalone off-grid hardware projects:
